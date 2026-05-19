@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -52,16 +53,18 @@ export function UserMenu({ user, signOutAction }: UserMenuProps) {
           <div className="text-xs text-muted-foreground">{user.email}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <form action={signOutAction}>
-          <DropdownMenuItem
-            render={(props) => (
-              <button type="submit" {...props}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Çıkış yap
-              </button>
-            )}
-          />
-        </form>
+        <DropdownMenuGroup>
+          <form action={signOutAction}>
+            <DropdownMenuItem
+              render={(props) => (
+                <button type="submit" {...props}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Çıkış yap
+                </button>
+              )}
+            />
+          </form>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

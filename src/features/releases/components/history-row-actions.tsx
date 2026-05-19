@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -66,16 +67,20 @@ export function HistoryRowActions({
           className="w-40"
           onClick={(e) => e.stopPropagation()}
         >
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              setOpen(true);
-            }}
-            className="text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Sil
-          </DropdownMenuItem>
+          {/* Base UI's Menu.Item requires a Menu.Group ancestor — wrapping
+              even a single item keeps the runtime from blowing up. */}
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setOpen(true);
+              }}
+              className="text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Sil
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
 
