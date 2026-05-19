@@ -76,7 +76,7 @@ export function HistoryList() {
           placeholder="Title ya da markdown içinde ara…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-9 pr-9"
+          className="bg-card border-border/70 pl-9 pr-9 shadow-sm"
           aria-label="Release'ler içinde ara"
         />
         {search && (
@@ -93,15 +93,19 @@ export function HistoryList() {
 
       {/* Status line above the list */}
       {!isInitialLoading && (
-        <div className="flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-          <span>
-            {all.length} sonuç
+        <div className="flex items-center justify-between font-mono text-[11px]">
+          <span className="text-muted-foreground">
+            <span className="font-medium text-primary">{all.length}</span>{" "}
+            sonuç
             {isSearching && all.length > 0 && (
-              <span className="ml-1">· “{search}” için</span>
+              <span className="ml-1">
+                · <span className="text-foreground">&ldquo;{search}&rdquo;</span>{" "}
+                için
+              </span>
             )}
           </span>
           {query.isFetching && !query.isFetchingNextPage && (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-primary">
               <Loader2 className="h-3 w-3 animate-spin" /> aranıyor
             </span>
           )}
@@ -120,7 +124,7 @@ export function HistoryList() {
         <EmptyState searching={isSearching} />
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-border/60">
+          <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
             {all.map((r, i) => {
               const title = r.title ?? `${r.baseRef} → ${r.headRef}`;
               return (
@@ -191,7 +195,7 @@ export function HistoryList() {
 
 function ListSkeleton() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60">
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm">
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
