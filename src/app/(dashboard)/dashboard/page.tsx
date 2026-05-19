@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 export default async function DashboardHome() {
   const session = await auth();
   const recent = session?.user?.id
-    ? await listReleasesForUser(session.user.id, 5)
+    ? (await listReleasesForUser(session.user.id, { limit: 5 })).items
     : [];
 
   return (

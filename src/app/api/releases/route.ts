@@ -9,6 +9,13 @@ import {
 } from "@/features/releases/releases.service";
 import { generatedReleaseSchema } from "@/types/release-schemas";
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: z.string().trim().min(1).max(200).optional(),
+  /** Cursor encoded as `<isoDate>|<id>`. */
+  cursor: z.string().optional(),
+});
+
 const postSchema = z.object({
   provider: providerSchema,
   owner: z.string().min(1),
@@ -20,11 +27,19 @@ const postSchema = z.object({
   release: generatedReleaseSchema,
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const userId = await requireSessionUserId();
-    const releases = await listReleasesForUser(userId);
-    return apiOk({ releases });
+    const { limit, search, cursor } = listQuerySchema.parse(
+      Object.fromEntries(req.nextUrl.searchParams),
+    );
+    const decoded = cursor ? decodeCursor(cursor) : undefined;
+    const page = await listReleasesForUser(userId, {
+      limit,
+      search,
+      cursor: decoded,
+    });
+    return apiOk(page);
   } catch (err) {
     return handleApiError(err);
   }
@@ -39,4 +54,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
+}
+
+function decodeCursor(raw: string): { createdAt: Date; id: string } | undefined {
+  const [iso, id] = raw.split("|");
+  if (!iso || !id) return undefined;
+  const createdAt = new Date(iso);
+  if (Number.isNaN(createdAt.getTime())) return undefined;
+  return { createdAt, id };
 }

@@ -90,11 +90,69 @@ export async function saveRelease(userId: string, input: SaveReleaseInput) {
   });
 }
 
-export async function listReleasesForUser(userId: string, limit = 30) {
-  return prisma.releaseHistory.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
+export interface ListReleasesInput {
+  /** Page size. Defaults to 20; capped at 100. */
+  limit?: number;
+  /** Opaque cursor — pass the value returned in `nextCursor` from the
+   *  previous page. Omit on the first page. */
+  cursor?: { createdAt: Date; id: string };
+  /** Case-insensitive substring filter over title + markdown. */
+  search?: string;
+}
+
+export interface ListReleasesResult {
+  items: Array<{
+    id: string;
+    provider: "GITHUB" | "BITBUCKET" | "GITLAB";
+    repoOwner: string;
+    repoName: string;
+    baseRef: string;
+    headRef: string;
+    title: string | null;
+    modelUsed: string | null;
+    createdAt: Date;
+  }>;
+  /** `null` once the list is exhausted. */
+  nextCursor: { createdAt: string; id: string } | null;
+}
+
+/**
+ * Cursor-based pagination over a user's releases. Using `(createdAt, id)` as
+ * a compound cursor avoids the dropped-row problem you get with `OFFSET`
+ * when new rows arrive during paging.
+ */
+export async function listReleasesForUser(
+  userId: string,
+  input: ListReleasesInput = {},
+): Promise<ListReleasesResult> {
+  const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
+  const search = input.search?.trim();
+
+  const items = await prisma.releaseHistory.findMany({
+    where: {
+      userId,
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: "insensitive" } },
+              { markdown: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      ...(input.cursor
+        ? {
+            OR: [
+              { createdAt: { lt: input.cursor.createdAt } },
+              {
+                createdAt: input.cursor.createdAt,
+                id: { lt: input.cursor.id },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1, // sentinel row to detect whether more exist
     select: {
       id: true,
       provider: true,
@@ -107,6 +165,14 @@ export async function listReleasesForUser(userId: string, limit = 30) {
       createdAt: true,
     },
   });
+
+  let nextCursor: ListReleasesResult["nextCursor"] = null;
+  if (items.length > limit) {
+    const last = items[limit - 1];
+    nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
+    items.length = limit;
+  }
+  return { items, nextCursor };
 }
 
 export async function getReleaseForUser(userId: string, id: string) {
