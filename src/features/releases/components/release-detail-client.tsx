@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Copy,
@@ -51,6 +52,7 @@ export interface ReleaseDetail {
 
 export function ReleaseDetailClient({ release }: { release: ReleaseDetail }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(release.title ?? "");
   const [markdown, setMarkdown] = useState(release.markdown);
@@ -88,7 +90,9 @@ export function ReleaseDetailClient({ release }: { release: ReleaseDetail }) {
       await update.mutateAsync({ id: release.id, title, markdown });
       toast.success("Değişiklikler kaydedildi");
       setEditing(false);
-      // Refresh server data so the page picks up the new values.
+      // Server component re-renders pick up the new values; client-side
+      // history query needs its own cache invalidation.
+      await qc.invalidateQueries({ queryKey: ["releases"] });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Kayıt başarısız");
@@ -105,6 +109,7 @@ export function ReleaseDetailClient({ release }: { release: ReleaseDetail }) {
     try {
       await remove.mutateAsync(release.id);
       toast.success("Release silindi");
+      await qc.invalidateQueries({ queryKey: ["releases"] });
       router.push("/dashboard/history");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Silinemedi");

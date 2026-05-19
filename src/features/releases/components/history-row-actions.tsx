@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -33,12 +34,17 @@ export function HistoryRowActions({
   const [open, setOpen] = useState(false);
   const remove = useDeleteRelease();
   const router = useRouter();
+  const qc = useQueryClient();
 
   const handleDelete = async () => {
     try {
       await remove.mutateAsync(id);
       toast.success("Release silindi");
       setOpen(false);
+      // The history list is driven by a client-side useInfiniteQuery, so a
+      // bare router.refresh() doesn't touch its cache. Invalidate the
+      // releases queries (any search variant) to force a refetch.
+      await qc.invalidateQueries({ queryKey: ["releases"] });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Silinemedi");
