@@ -32,6 +32,7 @@ export function HistoryRowActions({
   id: string;
   title: string;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const remove = useDeleteRelease();
   const router = useRouter();
@@ -54,7 +55,7 @@ export function HistoryRowActions({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Eylemler"
@@ -74,7 +75,17 @@ export function HistoryRowActions({
               // Base UI's MenuItem exposes onClick, not onSelect — using the
               // wrong prop is silently dropped, which is why the menu used to
               // do nothing at all.
-              onClick={() => setOpen(true)}
+              //
+              // The dialog open must be deferred until after the menu's
+              // close animation finishes. Otherwise the menu's modal
+              // backdrop (and focus trap) is still mounted when the dialog
+              // appears, and it silently swallows clicks on the dialog's
+              // buttons — the user sees the confirmation but pressing "Sil"
+              // does nothing.
+              onClick={() => {
+                setMenuOpen(false);
+                window.setTimeout(() => setOpen(true), 150);
+              }}
               className="text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />
