@@ -71,10 +71,10 @@ export function HistoryRowActions({
               even a single item keeps the runtime from blowing up. */}
           <DropdownMenuGroup>
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setOpen(true);
-              }}
+              // Base UI's MenuItem exposes onClick, not onSelect — using the
+              // wrong prop is silently dropped, which is why the menu used to
+              // do nothing at all.
+              onClick={() => setOpen(true)}
               className="text-destructive"
             >
               <Trash2 className="mr-2 h-4 w-4" />
