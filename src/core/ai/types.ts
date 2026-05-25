@@ -45,9 +45,45 @@ export interface AIReleaseOutput {
   risks: RiskFinding[];
 }
 
+// ─── Template-driven, multi-repo generation ──────────────────────────────────
+
+export interface AITemplateRepoContext {
+  repoFullName: string;
+  /** "backend" | "frontend" | null — lets the model attribute changes. */
+  role: string | null;
+  pullRequests: Array<{
+    number: number;
+    title: string;
+    body: string | null;
+    author: string | null;
+    labels: string[];
+    mergedAt: string | null;
+  }>;
+}
+
+export interface AITemplateSectionSpec {
+  id: string;
+  heading: string;
+  instruction: string;
+}
+
+export interface AITemplateInput {
+  projectName: string;
+  windowLabel: string;
+  repos: AITemplateRepoContext[];
+  sections: AITemplateSectionSpec[];
+}
+
+export interface AITemplateOutput {
+  title: string;
+  /** Section id → drafted markdown content (heading excluded). */
+  sections: Record<string, string>;
+}
+
 export interface AIProvider {
   readonly name: string;
   readonly model: string;
   generateReleaseNotes(input: AIReleaseInput): Promise<AIReleaseOutput>;
   generateFromPullRequests(input: AIPRsInput): Promise<AIReleaseOutput>;
+  generateFromTemplate(input: AITemplateInput): Promise<AITemplateOutput>;
 }

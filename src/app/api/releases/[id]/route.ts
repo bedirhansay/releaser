@@ -14,10 +14,15 @@ const patchSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     markdown: z.string().min(1).optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
   })
-  .refine((v) => v.title !== undefined || v.markdown !== undefined, {
-    message: "Provide at least one of: title, markdown",
-  });
+  .refine(
+    (v) =>
+      v.title !== undefined ||
+      v.markdown !== undefined ||
+      v.tags !== undefined,
+    { message: "Provide at least one of: title, markdown, tags" },
+  );
 
 export async function GET(
   _req: NextRequest,

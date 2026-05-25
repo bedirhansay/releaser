@@ -48,18 +48,19 @@ export function GenerateForm({
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [base, setBase] = useState<string | null>(null);
   const [head, setHead] = useState<string | null>(null);
+  const [prevProvider, setPrevProvider] = useState(provider);
 
-  useEffect(() => {
-    if (!provider && providers.data && providers.data.length > 0) {
-      setProvider(providers.data[0]);
-    }
-  }, [providers.data, provider]);
-
-  useEffect(() => {
+  // Auto-pick the first linked provider, and reset dependent selections when
+  // the provider changes — both during render, avoiding setState-in-effect.
+  if (!provider && providers.data && providers.data.length > 0) {
+    setProvider(providers.data[0]);
+  }
+  if (provider !== prevProvider) {
+    setPrevProvider(provider);
     setRepoFullName(null);
     setBase(null);
     setHead(null);
-  }, [provider]);
+  }
 
   // Search is now driven inside the combobox via cmdk's internal filter, so we
   // just fetch the whole (recent) repo list once per provider.

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requireSessionUserId } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { providerSchema } from "@/shared/api/provider-schema";
-import { enforce, POLICIES } from "@/shared/api/rate-limit";
+import { POLICIES } from "@/shared/api/rate-limit";
+import { enforceDistributed } from "@/shared/api/rate-limit-distributed";
 import { generateReleaseForUser } from "@/features/releases/releases.service";
 
 const bodySchema = z.object({
@@ -17,9 +18,10 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireSessionUserId();
-    // Cap AI cost per user — bounded burn from a hostile session or runaway
-    // client. Throws RateLimitError, translated by handleApiError to 429.
-    enforce(`ai-generate:${userId}`, POLICIES.AI_GENERATE);
+    // Cap AI cost per user — short-term burst limit + daily quota. Throws
+    // RateLimitError, translated by handleApiError to 429.
+    await enforceDistributed(`ai-generate:${userId}`, POLICIES.AI_GENERATE);
+    await enforceDistributed(`ai-quota:${userId}`, POLICIES.AI_DAILY_QUOTA);
 
     const input = bodySchema.parse(await req.json());
     const release = await generateReleaseForUser(userId, input);

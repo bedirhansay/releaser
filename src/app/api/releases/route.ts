@@ -12,9 +12,13 @@ import { generatedReleaseSchema } from "@/types/release-schemas";
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().trim().min(1).max(200).optional(),
+  /** Comma-separated tag filter, e.g. `tags=backend,frontend` (OR match). */
+  tags: z.string().trim().min(1).max(200).optional(),
   /** Cursor encoded as `<isoDate>|<id>`. */
   cursor: z.string().optional(),
 });
+
+const tagSchema = z.string().trim().min(1).max(32);
 
 const postSchema = z.object({
   provider: providerSchema,
@@ -24,19 +28,21 @@ const postSchema = z.object({
   head: z.string().min(1),
   title: z.string().min(1),
   markdown: z.string().min(1),
+  tags: z.array(tagSchema).max(20).optional(),
   release: generatedReleaseSchema,
 });
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireSessionUserId();
-    const { limit, search, cursor } = listQuerySchema.parse(
+    const { limit, search, tags, cursor } = listQuerySchema.parse(
       Object.fromEntries(req.nextUrl.searchParams),
     );
     const decoded = cursor ? decodeCursor(cursor) : undefined;
     const page = await listReleasesForUser(userId, {
       limit,
       search,
+      tags: tags?.split(",").map((t) => t.trim()).filter(Boolean),
       cursor: decoded,
     });
     return apiOk(page);

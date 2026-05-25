@@ -43,26 +43,39 @@ function wrapError(err: unknown): never {
   );
 }
 
+export interface GitHubProviderOptions {
+  /**
+   * When true the token is a GitHub App *installation* token, so repository
+   * listing must come from the installation's granted set rather than the
+   * user-scoped endpoint. All other calls are identical.
+   */
+  installation?: boolean;
+}
+
 export class GitHubProvider implements GitProvider {
   readonly kind = "github" as const;
   private readonly octokit: Octokit;
+  private readonly installation: boolean;
 
-  constructor(accessToken: string) {
+  constructor(accessToken: string, options: GitHubProviderOptions = {}) {
     if (!accessToken) throw new GitAuthError("Missing GitHub access token");
     this.octokit = new Octokit({ auth: accessToken });
+    this.installation = options.installation ?? false;
   }
 
   async getRepositories(params: ListReposParams = {}): Promise<Repository[]> {
     try {
-      const { data } = await this.octokit.repos.listForAuthenticatedUser({
-        per_page: params.perPage ?? 50,
-        page: params.page ?? 1,
-        sort: "pushed",
-        visibility: "all",
-        affiliation: "owner,collaborator,organization_member",
-      });
-      const search = params.search?.toLowerCase();
-      const repos = data.map<Repository>((r) => ({
+      const mapRepo = (r: {
+        id: number;
+        full_name: string;
+        name: string;
+        owner: { login: string };
+        default_branch: string;
+        private: boolean;
+        description: string | null;
+        html_url: string;
+        pushed_at?: string | null;
+      }): Repository => ({
         id: String(r.id),
         fullName: r.full_name,
         name: r.name,
@@ -72,7 +85,28 @@ export class GitHubProvider implements GitProvider {
         description: r.description,
         url: r.html_url,
         pushedAt: r.pushed_at ?? null,
-      }));
+      });
+
+      // App installation tokens can only see the repos the user granted; the
+      // user-scoped "listForAuthenticatedUser" endpoint 403s for them.
+      const repos = this.installation
+        ? (
+            await this.octokit.apps.listReposAccessibleToInstallation({
+              per_page: params.perPage ?? 100,
+              page: params.page ?? 1,
+            })
+          ).data.repositories.map(mapRepo)
+        : (
+            await this.octokit.repos.listForAuthenticatedUser({
+              per_page: params.perPage ?? 50,
+              page: params.page ?? 1,
+              sort: "pushed",
+              visibility: "all",
+              affiliation: "owner,collaborator,organization_member",
+            })
+          ).data.map(mapRepo);
+
+      const search = params.search?.toLowerCase();
       return search
         ? repos.filter((r) => r.fullName.toLowerCase().includes(search))
         : repos;

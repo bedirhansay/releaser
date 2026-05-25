@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/markdown/markdown-editor";
 import { MarkdownPreview } from "@/components/markdown/markdown-preview";
 import { RiskList } from "./risk-list";
+import { TagInput } from "./tag-input";
 import type { GeneratedRelease } from "@/types/release";
 import { useSaveRelease, type GenerateInput } from "@/features/releases/hooks";
 
@@ -22,6 +23,7 @@ export function ReleaseWorkspace({
 }) {
   const [title, setTitle] = useState(initial.title);
   const [markdown, setMarkdown] = useState(initial.markdown);
+  const [tags, setTags] = useState<string[]>([]);
   const save = useSaveRelease();
 
   const handleCopy = async () => {
@@ -52,6 +54,7 @@ export function ReleaseWorkspace({
         ...context,
         title,
         markdown,
+        tags,
         release: { ...initial, markdown, title },
       });
       toast.success("Geçmişe kaydedildi");
@@ -72,6 +75,7 @@ export function ReleaseWorkspace({
             onChange={(e) => setTitle(e.target.value)}
             className="mt-2 border-0 bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
           />
+          <TagInput value={tags} onChange={setTags} className="mt-3" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleCopy} className="gap-2">

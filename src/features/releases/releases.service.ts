@@ -4,7 +4,7 @@ import {
   ReleaseEngine,
   type ReleaseEnginePRsResult,
 } from "@/core/release/engine";
-import { createAIProvider } from "@/core/ai/provider-factory";
+import { resolveAiProviderForUser } from "@/features/settings/ai-settings.service";
 import { resolveGitProviderForUser } from "@/core/git/resolve-provider";
 import type { GitProviderKind, PRFilterMode } from "@/core/git/types";
 import type { GeneratedRelease } from "@/types/release";
@@ -31,6 +31,10 @@ export interface SaveReleaseInput {
   head: string;
   title: string;
   markdown: string;
+  tags?: string[];
+  /** Set when the release was generated for a multi-repo Project. */
+  projectId?: string;
+  templateId?: string;
   release: GeneratedRelease;
 }
 
@@ -40,7 +44,7 @@ export async function generateReleaseForUser(
 ): Promise<GeneratedRelease> {
   const [git, ai] = await Promise.all([
     resolveGitProviderForUser(userId, input.provider),
-    Promise.resolve(createAIProvider()),
+    resolveAiProviderForUser(userId),
   ]);
   const engine = new ReleaseEngine({ git, ai });
   return engine.generate(input);
@@ -59,7 +63,7 @@ export async function generateReleaseFromPRsForUser(
 ): Promise<ReleaseEnginePRsResult> {
   const [git, ai] = await Promise.all([
     resolveGitProviderForUser(userId, input.provider),
-    Promise.resolve(createAIProvider()),
+    resolveAiProviderForUser(userId),
   ]);
   const engine = new ReleaseEngine({ git, ai });
   return engine.generateFromPRs({
@@ -73,12 +77,15 @@ export async function saveRelease(userId: string, input: SaveReleaseInput) {
   return prisma.releaseHistory.create({
     data: {
       userId,
+      projectId: input.projectId ?? null,
+      templateId: input.templateId ?? null,
       provider: PROVIDER_TO_DB[input.provider],
       repoOwner: input.owner,
       repoName: input.repo,
       baseRef: input.base,
       headRef: input.head,
       title: input.title,
+      tags: normalizeTags(input.tags),
       markdown: input.markdown,
       // `GeneratedRelease` is JSON-serialisable by construction (no Date /
        // class instances), but Prisma's `InputJsonValue` type can't see that
@@ -98,6 +105,8 @@ export interface ListReleasesInput {
   cursor?: { createdAt: Date; id: string };
   /** Case-insensitive substring filter over title + markdown. */
   search?: string;
+  /** Restrict to releases carrying *any* of these tags (OR semantics). */
+  tags?: string[];
 }
 
 export interface ListReleasesResult {
@@ -109,6 +118,9 @@ export interface ListReleasesResult {
     baseRef: string;
     headRef: string;
     title: string | null;
+    tags: string[];
+    projectId: string | null;
+    projectName: string | null;
     modelUsed: string | null;
     createdAt: Date;
   }>;
@@ -127,6 +139,7 @@ export async function listReleasesForUser(
 ): Promise<ListReleasesResult> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
   const search = input.search?.trim();
+  const tags = normalizeTags(input.tags);
 
   const items = await prisma.releaseHistory.findMany({
     where: {
@@ -139,6 +152,7 @@ export async function listReleasesForUser(
             ],
           }
         : {}),
+      ...(tags.length ? { tags: { hasSome: tags } } : {}),
       ...(input.cursor
         ? {
             OR: [
@@ -161,6 +175,9 @@ export async function listReleasesForUser(
       baseRef: true,
       headRef: true,
       title: true,
+      tags: true,
+      projectId: true,
+      project: { select: { name: true } },
       modelUsed: true,
       createdAt: true,
     },
@@ -172,7 +189,12 @@ export async function listReleasesForUser(
     nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
     items.length = limit;
   }
-  return { items, nextCursor };
+  // Flatten the project relation down to a plain name for the UI.
+  const flat = items.map(({ project, ...rest }) => ({
+    ...rest,
+    projectName: project?.name ?? null,
+  }));
+  return { items: flat, nextCursor };
 }
 
 export async function getReleaseForUser(userId: string, id: string) {
@@ -184,11 +206,12 @@ export async function getReleaseForUser(userId: string, id: string) {
 export interface UpdateReleaseInput {
   title?: string;
   markdown?: string;
+  tags?: string[];
 }
 
-// Updates only the user-editable surface (title + markdown). The structured
-// AI payload is kept frozen so we always have an audit trail of what the
-// model originally produced.
+// Updates only the user-editable surface (title + markdown + tags). The
+// structured AI payload is kept frozen so we always have an audit trail of
+// what the model originally produced.
 export async function updateReleaseForUser(
   userId: string,
   id: string,
@@ -199,6 +222,9 @@ export async function updateReleaseForUser(
     data: {
       ...(patch.title !== undefined ? { title: patch.title } : {}),
       ...(patch.markdown !== undefined ? { markdown: patch.markdown } : {}),
+      ...(patch.tags !== undefined
+        ? { tags: normalizeTags(patch.tags) }
+        : {}),
     },
   });
   return result.count > 0;
@@ -209,4 +235,23 @@ export async function deleteReleaseForUser(userId: string, id: string) {
     where: { id, userId },
   });
   return result.count > 0;
+}
+
+/**
+ * Canonicalises user-authored tags: trims, drops empties, lower-cases for
+ * consistent grouping/filtering, and de-dupes while preserving order. Capped
+ * to keep a single release from accumulating an unbounded label set.
+ */
+export function normalizeTags(tags: string[] | undefined): string[] {
+  if (!tags?.length) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tags) {
+    const tag = raw.trim().toLowerCase();
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= 20) break;
+  }
+  return out;
 }

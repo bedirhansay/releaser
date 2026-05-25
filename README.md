@@ -71,6 +71,26 @@ commits.
 Both flows share the same engine and the same output schema (categorized
 notes + risk findings + markdown).
 
+## Projects, templates & releases
+
+Beyond single-repo generation, Releaser supports a multi-repo, templated flow:
+
+- **Projects** bundle several repositories (e.g. a product = `backend` +
+  `frontend`). One release spans them all; repos can be role-tagged.
+- **Editable templates** define the document structure as an ordered list of
+  sections (`heading` + an AI `instruction`). The AI drafts every section, so
+  the same project always produces the same shape. A finsel-style default
+  ships out of the box and is fully editable.
+- **Tags** — free-form labels on saved releases (e.g. `backend`/`frontend`),
+  filterable in history.
+- **Per-user AI keys (BYO-LLM)** — each user can set their own OpenAI-compatible
+  key/endpoint in Settings; it's encrypted at rest and used for their
+  generations, falling back to the shared `AI_*` env when unset.
+- **GitHub App access (Coolify-style)** — optional fine-grained, per-repo,
+  read-only repo access via short-lived installation tokens. Login stays on
+  OAuth; the App only grants repo data access. Falls back to OAuth when not
+  configured.
+
 ## Getting started
 
 ```bash
@@ -82,10 +102,16 @@ docker run -d --name releaser-pg -p 5432:5432 \
   -e POSTGRES_DB=releaser postgres:16
 
 cp .env.example .env
-# fill in the env values, then:
+# fill in the env values, then (local dev):
 pnpm db:push
 pnpm dev
+
+# Production uses versioned migrations instead of db:push:
+pnpm db:migrate:deploy
 ```
+
+> Changing the Prisma schema regenerates the client — restart `pnpm dev`
+> afterwards so the running server picks it up.
 
 Open <http://localhost:3000> (or 3002 if 3000 is taken). The
 [`/guide`](http://localhost:3000/guide) page is a complete end-to-end walkthrough.
@@ -103,18 +129,39 @@ AUTH_GITHUB_SECRET=...
 AUTH_BITBUCKET_ID=...
 AUTH_BITBUCKET_SECRET=...
 
-# AI provider (OpenAI-compatible):
+# AI provider (OpenAI-compatible) — shared fallback; users can override per-account:
 AI_API_KEY=...
 AI_BASE_URL=                   # blank for OpenAI; URL for GLM / DeepSeek / Groq / Ollama
 AI_MODEL=gpt-4o-mini           # or glm-4.6, deepseek-chat, llama-3.3-70b-versatile, llama3
 ```
 
+Optional, for production:
+
+```env
+# GitHub App (Coolify-style per-repo access). See .env.example for setup steps.
+GITHUB_APP_ID=...
+GITHUB_APP_PRIVATE_KEY=...      # PEM; newlines may be escaped as \n
+GITHUB_APP_SLUG=...
+GITHUB_APP_CLIENT_ID=...
+GITHUB_APP_CLIENT_SECRET=...
+GITHUB_APP_WEBHOOK_SECRET=...
+
+# Distributed rate-limit + AI quota across instances (else in-process):
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+The server validates required env at boot (`src/instrumentation.ts`) so a
+misconfigured deploy fails fast with a clear message.
+
 ## API endpoints
 
-All routes require an authenticated session.
+All routes require an authenticated session, except `/api/health` and
+`/api/github/app/webhook` (HMAC-verified) which are public by design.
 
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
+| GET    | `/api/health` | Liveness/readiness probe (DB ping) |
 | GET    | `/api/providers` | List git providers linked to the user |
 | GET    | `/api/repos?provider=...` | List the user's repos |
 | GET    | `/api/repos/{owner}/{repo}/branches?provider=...` | List branches |
@@ -126,8 +173,20 @@ All routes require an authenticated session.
 | GET    | `/api/releases` | List saved releases (current user) |
 | POST   | `/api/releases` | Save a generated release |
 | GET    | `/api/releases/{id}` | Read one |
-| PATCH  | `/api/releases/{id}` | Update title and/or markdown |
+| PATCH  | `/api/releases/{id}` | Update title, markdown and/or tags |
 | DELETE | `/api/releases/{id}` | Delete a release |
+| GET/POST | `/api/projects` | List / create projects (multi-repo) |
+| GET/PATCH/DELETE | `/api/projects/{id}` | Read / update / delete a project |
+| POST   | `/api/projects/{id}/generate` | Generate a templated release across the project's repos |
+| POST   | `/api/projects/{id}/releases` | Save a generated project release |
+| GET/POST | `/api/templates` | List / create editable templates |
+| GET/PATCH/DELETE | `/api/templates/{id}` | Read / update / delete a template |
+| GET/PUT | `/api/settings/ai` | Read status / set per-user AI key (BYO-LLM) |
+| GET    | `/api/github/app` | GitHub App config status + installations |
+| DELETE | `/api/github/app/{id}` | Forget an installation locally |
+| GET    | `/api/github/app/install` | Start the App install flow |
+| GET    | `/api/github/app/callback` | Post-install callback |
+| POST   | `/api/github/app/webhook` | Installation lifecycle (HMAC-verified, public) |
 
 ## Scripts
 
@@ -140,8 +199,9 @@ All routes require an authenticated session.
 | `pnpm typecheck`    | `tsc --noEmit`                     |
 | `pnpm test`         | Vitest (one-shot)                  |
 | `pnpm test:watch`   | Vitest (watch mode)                |
-| `pnpm db:push`      | Push Prisma schema to DB           |
-| `pnpm db:migrate`   | Create + apply a migration         |
+| `pnpm db:push`      | Push Prisma schema to DB (dev)     |
+| `pnpm db:migrate`   | Create + apply a migration (dev)   |
+| `pnpm db:migrate:deploy` | Apply migrations (production) |
 | `pnpm db:studio`    | Prisma Studio                      |
 
 ## Contributing

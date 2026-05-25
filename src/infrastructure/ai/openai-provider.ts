@@ -5,6 +5,8 @@ import type {
   AIProvider,
   AIReleaseInput,
   AIReleaseOutput,
+  AITemplateInput,
+  AITemplateOutput,
 } from "@/core/ai/types";
 import { RELEASE_CATEGORIES, RISK_KINDS } from "@/types/release";
 
@@ -167,6 +169,45 @@ export class OpenAIProvider implements AIProvider {
     return this.complete(SYSTEM_PROMPT, buildPRsUserPrompt(input));
   }
 
+  async generateFromTemplate(
+    input: AITemplateInput,
+  ): Promise<AITemplateOutput> {
+    const completion = await this.client.chat.completions.create({
+      model: this.model,
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: TEMPLATE_SYSTEM_PROMPT },
+        { role: "user", content: buildTemplateUserPrompt(input) },
+      ],
+    });
+
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) throw new Error("AI returned an empty response");
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("AI returned non-JSON response");
+    }
+
+    const result = templateResponseSchema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error(
+        `AI template response failed validation: ${result.error.message}`,
+      );
+    }
+
+    // Guarantee every requested section has an entry, even if the model
+    // skipped one — keeps the rendered document structurally complete.
+    const sections: Record<string, string> = {};
+    for (const spec of input.sections) {
+      sections[spec.id] = result.data.sections[spec.id]?.trim() || "_—_";
+    }
+    return { title: result.data.title, sections };
+  }
+
   private async complete(
     system: string,
     user: string,
@@ -199,6 +240,81 @@ export class OpenAIProvider implements AIProvider {
     }
     return result.data as AIReleaseOutput;
   }
+}
+
+// ─── Template-driven, multi-repo generation ──────────────────────────────────
+
+const templateResponseSchema = z.object({
+  title: z.string().optional().default("Release"),
+  // The model returns a map of sectionId → markdown content. Be lenient:
+  // missing sections are backfilled by the caller.
+  sections: z.record(z.string(), z.string()).optional().default({}),
+});
+
+const TEMPLATE_SYSTEM_PROMPT = `You are a senior release manager. You write a structured release document for a product that may span MULTIPLE repositories (e.g. a backend and a frontend), grouped under one project.
+
+You are given:
+- The project name and the release window.
+- For each repository: its role (backend / frontend / …) and the merged pull requests in scope.
+- An ORDERED list of template sections. Each section has an "id", a "heading", and an "instruction" describing exactly what to write there.
+
+Rules:
+- Write content for EVERY section id, following that section's instruction precisely.
+- Content is GitHub-flavoured Markdown WITHOUT the heading itself (the caller adds the heading). Use sub-bullets, tables, bold as the instruction implies.
+- Attribute changes to the right repository/role when relevant (e.g. group Backend vs Frontend).
+- Reference PRs as #<number> where useful. Be precise and developer-focused; avoid marketing fluff.
+- For fields you cannot infer from the changes (version numbers, sign-off names, dates, monitoring links), produce sensible PLACEHOLDERS the user can edit (e.g. _([isim])_, vYYYY-MM-DD, TODO).
+- Respond with JSON ONLY — no prose, no markdown fences.
+
+The response MUST be a single JSON object:
+{
+  "title": "string — short release title",
+  "sections": { "<sectionId>": "markdown content for that section", ... }
+}
+Include an entry for every section id you were given.`;
+
+function buildTemplateUserPrompt(input: AITemplateInput): string {
+  const MAX_BODY = 500;
+  const repoBlocks = input.repos
+    .map((r) => {
+      const prLines = r.pullRequests.length
+        ? r.pullRequests
+            .map((p) => {
+              const body = p.body
+                ? p.body.length > MAX_BODY
+                  ? `${p.body.slice(0, MAX_BODY)}…`
+                  : p.body
+                : "";
+              const labels = p.labels.length
+                ? ` [labels: ${p.labels.join(", ")}]`
+                : "";
+              const author = p.author ? ` by @${p.author}` : "";
+              return `  - #${p.number}: ${p.title}${author}${labels}${
+                body ? `\n      ${body.replace(/\n+/g, " ")}` : ""
+              }`;
+            })
+            .join("\n")
+        : "  (no merged PRs in window)";
+      return `Repository: ${r.repoFullName}${
+        r.role ? ` (role: ${r.role})` : ""
+      }\n${prLines}`;
+    })
+    .join("\n\n");
+
+  const sectionLines = input.sections
+    .map((s, i) => `${i + 1}. id="${s.id}" — ${s.heading}\n   → ${s.instruction}`)
+    .join("\n");
+
+  return [
+    `Project: ${input.projectName}`,
+    `Release window: ${input.windowLabel}`,
+    ``,
+    `=== Repositories & changes ===`,
+    repoBlocks,
+    ``,
+    `=== Sections to write (in order) ===`,
+    sectionLines,
+  ].join("\n");
 }
 
 function buildPRsUserPrompt(input: AIPRsInput): string {

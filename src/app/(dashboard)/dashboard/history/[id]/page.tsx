@@ -42,6 +42,7 @@ export default async function ReleaseDetailPage({
           id: release.id,
           title: release.title,
           markdown: release.markdown,
+          tags: release.tags,
           repoOwner: release.repoOwner,
           repoName: release.repoName,
           baseRef: release.baseRef,

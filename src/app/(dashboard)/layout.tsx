@@ -6,8 +6,11 @@ import { Logo } from "@/components/brand/logo";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import {
   BookOpen,
+  FolderGit2,
   History,
   LayoutDashboard,
+  LayoutTemplate,
+  Settings,
   Wand2,
 } from "lucide-react";
 import { signOutAction } from "./_actions";
@@ -15,9 +18,19 @@ import { signOutAction } from "./_actions";
 const NAV_PRIMARY = [
   { href: "/dashboard", label: "Genel bakış", icon: LayoutDashboard, kbd: "1" },
   { href: "/dashboard/generate", label: "Yeni release", icon: Wand2, kbd: "2" },
-  { href: "/dashboard/history", label: "Geçmiş", icon: History, kbd: "3" },
+  { href: "/dashboard/projects", label: "Projeler", icon: FolderGit2, kbd: "3" },
+  {
+    href: "/dashboard/templates",
+    label: "Şablonlar",
+    icon: LayoutTemplate,
+    kbd: "4",
+  },
+  { href: "/dashboard/history", label: "Geçmiş", icon: History, kbd: "5" },
 ];
-const NAV_SECONDARY = [{ href: "/guide", label: "Rehber", icon: BookOpen }];
+const NAV_SECONDARY = [
+  { href: "/dashboard/settings", label: "Ayarlar", icon: Settings },
+  { href: "/guide", label: "Rehber", icon: BookOpen },
+];
 
 export default async function DashboardLayout({
   children,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
+  FolderGit2,
   GitCommit,
   Loader2,
   Search,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchJson } from "@/lib/http";
@@ -26,6 +28,9 @@ export interface HistoryRow {
   baseRef: string;
   headRef: string;
   title: string | null;
+  tags: string[];
+  projectId: string | null;
+  projectName: string | null;
   modelUsed: string | null;
   createdAt: string;
 }
@@ -39,6 +44,12 @@ const PAGE_SIZE = 20;
 
 export function HistoryList() {
   const [search, setSearch] = useState("");
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+
+  const toggleTag = (tag: string) =>
+    setActiveTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
 
   // Debounce-ish: search query is stable enough as an effect dep that we
   // just refetch on every keystroke. For larger histories we can add a
@@ -49,15 +60,16 @@ export function HistoryList() {
     Page,
     Error,
     { pages: Page[]; pageParams: Page["nextCursor"][] },
-    [string, { search: string }],
+    [string, { search: string; tags: string[] }],
     Page["nextCursor"]
   >({
-    queryKey: ["releases", { search }],
+    queryKey: ["releases", { search, tags: activeTags }],
     initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
     queryFn: ({ pageParam }) => {
       const qs = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (search) qs.set("search", search);
+      if (activeTags.length) qs.set("tags", activeTags.join(","));
       if (pageParam) qs.set("cursor", `${pageParam.createdAt}|${pageParam.id}`);
       return fetchJson<Page>(`/api/releases?${qs.toString()}`);
     },
@@ -65,7 +77,14 @@ export function HistoryList() {
 
   const all = query.data?.pages.flatMap((p) => p.items) ?? [];
   const isInitialLoading = query.isLoading;
-  const isSearching = !!search;
+  const isSearching = !!search || activeTags.length > 0;
+
+  // Union of tags visible in the current result set, kept stable with the
+  // active filters so a selected tag never vanishes from the bar while it's
+  // narrowing the list. Clearing the filter restores the full set.
+  const availableTags = Array.from(
+    new Set([...activeTags, ...all.flatMap((r) => r.tags)]),
+  ).sort();
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,6 +109,40 @@ export function HistoryList() {
           </button>
         )}
       </div>
+
+      {/* Tag filter bar — toggle chips, OR-matched server-side. */}
+      {availableTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {availableTags.map((tag) => {
+            const active = activeTags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                aria-pressed={active}
+                className={cn(
+                  "rounded-4xl border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                )}
+              >
+                {tag}
+              </button>
+            );
+          })}
+          {activeTags.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTags([])}
+              className="inline-flex items-center gap-1 px-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="h-3 w-3" /> filtreyi temizle
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Status line above the list */}
       {!isInitialLoading && (
@@ -155,6 +208,25 @@ export function HistoryList() {
                           </>
                         )}
                       </div>
+                      {(r.projectName || r.tags.length > 0) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                          {r.projectName && (
+                            <Badge className="h-4 gap-1 px-1.5 text-[10px]">
+                              <FolderGit2 className="h-2.5 w-2.5" />
+                              {r.projectName}
+                            </Badge>
+                          )}
+                          {r.tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className="h-4 px-1.5 text-[10px]"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="font-mono text-[11px] text-muted-foreground">
                       {new Date(r.createdAt).toLocaleDateString("tr-TR")}

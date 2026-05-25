@@ -23,9 +23,48 @@ model User {
   sessions        Session[]
   gitConnections  GitConnection[]
   releases        ReleaseHistory[]
+  projects        Project[]
+  templates       ReleaseTemplate[]
+  aiSetting       AiSetting?
+  ghInstallations GitHubInstallation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// A GitHub App installation a user has connected (Coolify-style). Repo access
+// uses short-lived installation tokens minted from the App's private key — the
+// user picks exactly which repos to grant during install. OAuth stays for
+// login/identity; this grants repo data access.
+model GitHubInstallation {
+  id                  String   @id @default(cuid())
+  userId              String
+  installationId      Int      @unique
+  accountLogin        String?
+  accountType         String?
+  repositorySelection String?
+  suspended           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Per-user "bring your own LLM" configuration. The API key is encrypted at
+// rest with the same AES-256-GCM cipher used for OAuth tokens. When absent,
+// generation falls back to the shared AI_* environment values.
+model AiSetting {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  apiKeyCipher String?  @db.Text
+  baseUrl      String?
+  model        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -85,15 +124,80 @@ model GitConnection {
   @@unique([userId, provider])
 }
 
+// ---------- Projects & templates ----------
+
+// A Project bundles one or more repositories (e.g. "finsel" = backend +
+// frontend) so a single release can span them all.
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  slug        String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repos     ProjectRepo[]
+  templates ReleaseTemplate[]
+  releases  ReleaseHistory[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// A repository inside a Project, optionally role-tagged ("backend",
+// "frontend", …) so the AI and UI can group changes by surface.
+model ProjectRepo {
+  id        String          @id @default(cuid())
+  projectId String
+  provider  GitProviderKind
+  owner     String
+  name      String
+  role      String?
+  createdAt DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, provider, owner, name])
+  @@index([projectId])
+}
+
+// A user-editable release template. `sections` is an ordered JSON list of
+// { id, heading, instruction } entries — the AI fills each section's content
+// at generate time, so the document structure is whatever the user defines.
+model ReleaseTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  name        String
+  description String?
+  sections    Json
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([projectId])
+}
+
 model ReleaseHistory {
   id          String          @id @default(cuid())
   userId      String
+  projectId   String?
+  templateId  String?
   provider    GitProviderKind
   repoOwner   String
   repoName    String
   baseRef     String
   headRef     String
   title       String?
+  // Free-form, user-authored labels (e.g. "backend", "frontend"). Scalar
+  // string list — Postgres-native, no join table needed for this scale.
+  tags        String[]        @default([])
   markdown    String          @db.Text
   // Snapshot of structured payload returned from the engine (categorized notes,
   // risks, model used). Stored as JSON for flexibility — schema may evolve.
@@ -101,8 +205,10 @@ model ReleaseHistory {
   modelUsed   String?
   createdAt   DateTime        @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([userId, repoOwner, repoName])
+  @@index([projectId])
 }

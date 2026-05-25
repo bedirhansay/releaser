@@ -87,3 +87,41 @@ export function buildMarkdown(input: BuildMarkdownInput): string {
 
   return lines.join("\n").trimEnd() + "\n";
 }
+
+// ─── Template-driven assembly ────────────────────────────────────────────────
+
+export interface TemplateMarkdownSection {
+  heading: string;
+  content: string;
+}
+
+export interface BuildTemplateMarkdownInput {
+  title: string;
+  projectName: string;
+  windowLabel: string;
+  sections: TemplateMarkdownSection[];
+}
+
+/**
+ * Assembles AI-drafted section content into one document, in template order.
+ * The heading lives here (the model returns content only), so the structure is
+ * always identical for a given template — that's the "standard shape" guarantee.
+ */
+export function buildTemplateMarkdown(
+  input: BuildTemplateMarkdownInput,
+): string {
+  const lines: string[] = [];
+  lines.push(`# ${input.title}`);
+  lines.push("");
+  lines.push(`_${input.projectName} · ${input.windowLabel}_`);
+  lines.push("");
+
+  for (const section of input.sections) {
+    lines.push(`## ${section.heading}`);
+    lines.push("");
+    lines.push(section.content.trim() || "_—_");
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd() + "\n";
+}

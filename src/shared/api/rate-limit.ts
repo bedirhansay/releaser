@@ -82,6 +82,11 @@ export class RateLimitError extends Error {
 export const POLICIES = {
   /** 10 AI generations per hour per user — bounds cost from a hostile session. */
   AI_GENERATE: { limit: 10, window: 60 * 60 * 1000 } satisfies RateLimitConfig,
+  /** 50 AI generations per rolling 24h per user — a daily cost ceiling. */
+  AI_DAILY_QUOTA: {
+    limit: 50,
+    window: 24 * 60 * 60 * 1000,
+  } satisfies RateLimitConfig,
 } as const;
 
 /**

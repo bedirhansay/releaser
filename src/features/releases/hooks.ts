@@ -58,6 +58,7 @@ export function useGenerateFromPRs() {
 export interface SaveInput extends GenerateInput {
   title: string;
   markdown: string;
+  tags?: string[];
   release: GeneratedRelease;
 }
 
@@ -79,6 +80,9 @@ export interface HistoryItem {
   baseRef: string;
   headRef: string;
   title: string | null;
+  tags: string[];
+  projectId: string | null;
+  projectName: string | null;
   modelUsed: string | null;
   createdAt: string;
 }
@@ -97,6 +101,7 @@ export interface UpdateReleaseHookInput {
   id: string;
   title?: string;
   markdown?: string;
+  tags?: string[];
 }
 
 export function useUpdateRelease() {

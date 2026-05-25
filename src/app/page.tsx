@@ -178,8 +178,8 @@ export default async function HomePage() {
               </h2>
             </div>
             <p className="text-muted-foreground md:max-w-md md:text-right">
-              Org dashboard'u yok, commit'lerini takip eden analytics yok —
-              sadece sürekli ertelediğin o tek iş.
+              Org dashboard&apos;u yok, commit&apos;lerini takip eden analytics
+              yok — sadece sürekli ertelediğin o tek iş.
             </p>
           </div>
 

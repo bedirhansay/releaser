@@ -94,6 +94,10 @@ function makeAI(): AIProvider {
         risks: [],
       };
     },
+    generateFromTemplate: async () => ({
+      title: "Template mock",
+      sections: {},
+    }),
     // @ts-expect-error — visible only on the mock
     calls,
   };

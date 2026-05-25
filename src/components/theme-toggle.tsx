@@ -11,7 +11,9 @@ export function ThemeToggle() {
 
   // next-themes resolves the actual theme on the client, so before mount we
   // don't know which icon to render. Render a neutral placeholder server-side
-  // to avoid a hydration mismatch.
+  // to avoid a hydration mismatch. This mount flag is the canonical
+  // hydration-safe pattern — a legitimate setState-in-effect.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {

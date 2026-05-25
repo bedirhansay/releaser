@@ -77,6 +77,11 @@ export function PRGenerateForm({
   const [baseTag, setBaseTag] = useState<string | null>(null);
   const [headTag, setHeadTag] = useState<string | null>(null);
 
+  // Previous-value trackers so we can reset dependent selections *during
+  // render* (React's recommended alternative to a setState-in-effect cascade).
+  const [prevProvider, setPrevProvider] = useState(provider);
+  const [prevRepo, setPrevRepo] = useState(repoFullName);
+
   const repos = useRepositories(provider ?? "github", "");
   const selected = useMemo(
     () => repos.data?.find((r) => r.fullName === repoFullName) ?? null,
@@ -94,28 +99,34 @@ export function PRGenerateForm({
   );
   const preview = usePullRequestsPreview();
 
-  // Auto-pick first linked provider; reset downstream selections when provider
-  // / repo changes (otherwise stale base/head tags leak across repos).
-  useEffect(() => {
-    if (!provider && providers.data && providers.data.length > 0) {
-      setProvider(providers.data[0]);
-    }
-  }, [providers.data, provider]);
+  // Auto-pick the first linked provider during render (avoids setState-in-effect).
+  if (!provider && providers.data && providers.data.length > 0) {
+    setProvider(providers.data[0]);
+  }
 
-  useEffect(() => {
+  // Reset dependent selections during render when provider/repo changes, so
+  // stale base/head tags never leak across repos. (Avoids setState-in-effect.)
+  if (provider !== prevProvider) {
+    setPrevProvider(provider);
     setRepoFullName(null);
     setBaseBranch(null);
     setBaseTag(null);
     setHeadTag(null);
-    preview.reset();
-  }, [provider]);
-
-  useEffect(() => {
+  }
+  if (repoFullName !== prevRepo) {
+    setPrevRepo(repoFullName);
     setBaseBranch(null);
     setBaseTag(null);
     setHeadTag(null);
+  }
+
+  // Clearing the PR preview is a react-query mutation reset (not React state),
+  // so it stays in an effect, keyed to the same provider/repo changes.
+  useEffect(() => {
     preview.reset();
-  }, [repoFullName]);
+    // preview.reset is stable across renders; intentionally not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, repoFullName]);
 
   useEffect(() => {
     onChange?.({
