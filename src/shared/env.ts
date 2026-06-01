@@ -15,7 +15,7 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
   TOKEN_ENCRYPTION_KEY: z
     .string()
-    .min(8, "TOKEN_ENCRYPTION_KEY must be at least 8 characters"),
+    .min(32, "TOKEN_ENCRYPTION_KEY must be at least 32 characters"),
 
   // OAuth providers — optional, but you need at least one to let users sign in.
   AUTH_GITHUB_ID: z.string().optional(),
@@ -37,6 +37,9 @@ const envSchema = z.object({
   AI_API_KEY: z.string().optional(),
   AI_BASE_URL: z.string().optional(),
   AI_MODEL: z.string().optional(),
+  // Set to "true" to allow a private/loopback AI baseUrl (e.g. a local Ollama at
+  // http://localhost:11434/v1). Left unset, such hosts are rejected as SSRF.
+  AI_ALLOW_PRIVATE_BASEURL: z.string().optional(),
 
   // Optional distributed rate-limit / quota store. When both are set the rate
   // limiter coordinates across instances; otherwise it falls back to in-process.

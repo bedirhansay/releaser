@@ -1,6 +1,10 @@
+import { auth } from "@/auth";
 import { ProjectsList } from "@/features/projects/components/projects-list";
 
-export default function ProjectsPage() {
+export default async function ProjectsPage() {
+  const session = await auth();
+  const isAdmin =
+    session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <div>
@@ -16,7 +20,7 @@ export default function ProjectsPage() {
         </p>
       </div>
 
-      <ProjectsList />
+      <ProjectsList isAdmin={isAdmin} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { providerSchema } from "@/shared/api/provider-schema";
 import { listBranches } from "@/features/repositories/repositories.service";
@@ -17,12 +17,12 @@ export async function GET(
   ctx: { params: Promise<{ owner: string; repo: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
     const params = paramsSchema.parse(await ctx.params);
     const { provider } = querySchema.parse(
       Object.fromEntries(req.nextUrl.searchParams),
     );
-    const branches = await listBranches(userId, provider, params);
+    const branches = await listBranches(session.orgId, provider, params);
     return apiOk({ branches });
   } catch (err) {
     return handleApiError(err);

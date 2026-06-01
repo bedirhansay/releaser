@@ -1,4 +1,6 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/infrastructure/db/prisma";
+import { isAdmin, type SessionContext } from "@/shared/api/require-session";
 import type { GitProviderKind } from "@/core/git/types";
 
 type DbProvider = "GITHUB" | "BITBUCKET" | "GITLAB";
@@ -24,14 +26,20 @@ export interface ProjectRepoInput {
   role?: string | null;
 }
 
-export interface CreateProjectInput {
+export interface ProjectMetaInput {
+  defaultRisk?: string | null;
+  monitoringLinks?: string | null;
+  signOff?: string | null;
+}
+
+export interface CreateProjectInput extends ProjectMetaInput {
   name: string;
   slug?: string | null;
   description?: string | null;
   repos: ProjectRepoInput[];
 }
 
-export interface UpdateProjectInput {
+export interface UpdateProjectInput extends ProjectMetaInput {
   name?: string;
   slug?: string | null;
   description?: string | null;
@@ -49,16 +57,44 @@ function toRepoCreate(repo: ProjectRepoInput) {
   };
 }
 
-export async function createProjectForUser(
-  userId: string,
+/**
+ * Visibility filter for a member: only projects granted to them directly or
+ * via one of their groups. Admins/owners see everything in the org, so they
+ * get an empty extra-filter. Returned as a Prisma `where` fragment.
+ */
+async function accessWhere(ctx: SessionContext): Promise<Prisma.ProjectWhereInput> {
+  if (isAdmin(ctx.role)) return {};
+  const groups = await prisma.groupMember.findMany({
+    where: { userId: ctx.userId },
+    select: { groupId: true },
+  });
+  const groupIds = groups.map((g) => g.groupId);
+  return {
+    access: {
+      some: {
+        OR: [
+          { userId: ctx.userId },
+          ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
+        ],
+      },
+    },
+  };
+}
+
+export async function createProjectForOrg(
+  ctx: SessionContext,
   input: CreateProjectInput,
 ) {
   const project = await prisma.project.create({
     data: {
-      userId,
+      orgId: ctx.orgId,
+      createdById: ctx.userId,
       name: input.name,
       slug: input.slug ?? null,
       description: input.description ?? null,
+      defaultRisk: input.defaultRisk ?? null,
+      monitoringLinks: input.monitoringLinks ?? null,
+      signOff: input.signOff ?? null,
       repos: { create: input.repos.map(toRepoCreate) },
     },
     select: { id: true },
@@ -71,6 +107,9 @@ export interface ProjectListItem {
   name: string;
   slug: string | null;
   description: string | null;
+  defaultRisk: string | null;
+  monitoringLinks: string | null;
+  signOff: string | null;
   createdAt: Date;
   updatedAt: Date;
   repos: Array<{
@@ -83,11 +122,11 @@ export interface ProjectListItem {
   releaseCount: number;
 }
 
-export async function listProjectsForUser(
-  userId: string,
+export async function listProjectsForOrg(
+  ctx: SessionContext,
 ): Promise<ProjectListItem[]> {
   const projects = await prisma.project.findMany({
-    where: { userId },
+    where: { orgId: ctx.orgId, ...(await accessWhere(ctx)) },
     orderBy: { createdAt: "desc" },
     include: {
       repos: true,
@@ -100,6 +139,9 @@ export async function listProjectsForUser(
     name: p.name,
     slug: p.slug,
     description: p.description,
+    defaultRisk: p.defaultRisk,
+    monitoringLinks: p.monitoringLinks,
+    signOff: p.signOff,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     repos: p.repos.map((r) => ({
@@ -113,9 +155,9 @@ export async function listProjectsForUser(
   }));
 }
 
-export async function getProjectForUser(userId: string, id: string) {
+export async function getProjectForOrg(ctx: SessionContext, id: string) {
   const project = await prisma.project.findFirst({
-    where: { id, userId },
+    where: { id, orgId: ctx.orgId, ...(await accessWhere(ctx)) },
     include: { repos: true },
   });
   if (!project) return null;
@@ -125,6 +167,9 @@ export async function getProjectForUser(userId: string, id: string) {
     name: project.name,
     slug: project.slug,
     description: project.description,
+    defaultRisk: project.defaultRisk,
+    monitoringLinks: project.monitoringLinks,
+    signOff: project.signOff,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     repos: project.repos.map((r) => ({
@@ -140,13 +185,13 @@ export async function getProjectForUser(userId: string, id: string) {
 // Replaces scalar fields when provided. When `repos` is supplied we treat it
 // as the full desired set: drop the existing rows and recreate, all inside a
 // transaction so a project never ends up with a half-applied repo list.
-export async function updateProjectForUser(
-  userId: string,
+export async function updateProjectForOrg(
+  ctx: SessionContext,
   id: string,
   patch: UpdateProjectInput,
 ): Promise<boolean> {
   const owned = await prisma.project.findFirst({
-    where: { id, userId },
+    where: { id, orgId: ctx.orgId },
     select: { id: true },
   });
   if (!owned) return false;
@@ -160,6 +205,13 @@ export async function updateProjectForUser(
         ...(patch.description !== undefined
           ? { description: patch.description }
           : {}),
+        ...(patch.defaultRisk !== undefined
+          ? { defaultRisk: patch.defaultRisk }
+          : {}),
+        ...(patch.monitoringLinks !== undefined
+          ? { monitoringLinks: patch.monitoringLinks }
+          : {}),
+        ...(patch.signOff !== undefined ? { signOff: patch.signOff } : {}),
       },
     });
 
@@ -177,10 +229,12 @@ export async function updateProjectForUser(
   return true;
 }
 
-export async function deleteProjectForUser(
-  userId: string,
+export async function deleteProjectForOrg(
+  ctx: SessionContext,
   id: string,
 ): Promise<boolean> {
-  const result = await prisma.project.deleteMany({ where: { id, userId } });
+  const result = await prisma.project.deleteMany({
+    where: { id, orgId: ctx.orgId },
+  });
   return result.count > 0;
 }

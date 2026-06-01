@@ -5,7 +5,7 @@ import {
   GitNotFoundError,
   GitProviderError,
 } from "@/core/git/errors";
-import { UnauthorizedError } from "./require-session";
+import { ForbiddenError, UnauthorizedError } from "./require-session";
 import { RateLimitError } from "./rate-limit";
 
 export interface ApiErrorBody {
@@ -43,6 +43,9 @@ export function handleApiError(err: unknown): NextResponse<ApiErrorBody> {
   }
   if (err instanceof UnauthorizedError) {
     return apiError(err.message, 401);
+  }
+  if (err instanceof ForbiddenError) {
+    return apiError(err.message, 403);
   }
   if (err instanceof RateLimitError) {
     return apiError(err.message, 429, undefined, {

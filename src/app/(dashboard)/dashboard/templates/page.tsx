@@ -1,6 +1,10 @@
+import { auth } from "@/auth";
 import { TemplatesList } from "@/features/templates/components/templates-list";
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
+  const session = await auth();
+  const isAdmin =
+    session?.user?.role === "OWNER" || session?.user?.role === "ADMIN";
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
       <div>
@@ -16,7 +20,7 @@ export default function TemplatesPage() {
         </p>
       </div>
 
-      <TemplatesList />
+      <TemplatesList isAdmin={isAdmin} />
     </div>
   );
 }

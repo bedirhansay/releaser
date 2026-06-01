@@ -34,6 +34,9 @@ export function RepoCombobox({
 }: Props) {
   const [open, setOpen] = useState(false);
   const selected = repos.find((r) => r.fullName === value) ?? null;
+  // Fall back to the raw value so an already-selected repo still shows while
+  // the list is loading or when it isn't in the accessible set (e.g. editing).
+  const label = selected?.fullName ?? value;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -47,9 +50,7 @@ export function RepoCombobox({
             className="w-full justify-between font-normal"
             {...props}
           >
-            <span className="truncate">
-              {selected ? selected.fullName : placeholder}
-            </span>
+            <span className="truncate">{label ?? placeholder}</span>
             {isLoading ? (
               <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
             ) : (

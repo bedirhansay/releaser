@@ -185,13 +185,14 @@ export function PRGenerateForm({
       <div className="rounded-md border border-border/60 bg-card/40 p-6 text-sm">
         <p className="font-medium">Bağlı git sağlayıcı yok.</p>
         <p className="mt-1 text-muted-foreground">
-          PR&apos;lardan release üretmek için bir sağlayıcı bağla.
+          PR&apos;lardan release üretmek için Ayarlar&apos;dan GitHub veya
+          Bitbucket bağla.
         </p>
         <Link
-          href="/login"
+          href="/dashboard/settings"
           className="mt-3 inline-flex text-primary underline"
         >
-          Giriş yap →
+          Ayarlar&apos;a git →
         </Link>
       </div>
     );

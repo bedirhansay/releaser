@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "@/auth";
-import { getReleaseForUser } from "@/features/releases/releases.service";
+import { getReleaseForOrg } from "@/features/releases/releases.service";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReleaseDetailClient } from "@/features/releases/components/release-detail-client";
@@ -15,9 +15,17 @@ export default async function ReleaseDetailPage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const release = session?.user?.id
-    ? await getReleaseForUser(session.user.id, id)
-    : null;
+  const release =
+    session?.user?.id && session.user.orgId && session.user.role
+      ? await getReleaseForOrg(
+          {
+            userId: session.user.id,
+            orgId: session.user.orgId,
+            role: session.user.role,
+          },
+          id,
+        )
+      : null;
   if (!release) notFound();
 
   // `release.payload` is `Prisma.JsonValue`; we trust our own writer but

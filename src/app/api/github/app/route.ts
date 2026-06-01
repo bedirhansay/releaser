@@ -1,12 +1,12 @@
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { isGitHubAppConfigured } from "@/infrastructure/github/app-auth";
-import { listInstallationsForUser } from "@/features/github-app/github-app.service";
+import { listInstallationsForOrg } from "@/features/github-app/github-app.service";
 
 export async function GET() {
   try {
-    const userId = await requireSessionUserId();
-    const installations = await listInstallationsForUser(userId);
+    const ctx = await requireSession();
+    const installations = await listInstallationsForOrg(ctx.orgId);
     return apiOk({
       configured: isGitHubAppConfigured(),
       installations,

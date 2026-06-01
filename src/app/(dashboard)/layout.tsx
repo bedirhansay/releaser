@@ -11,9 +11,9 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Settings,
+  Users,
   Wand2,
 } from "lucide-react";
-import { signOutAction } from "./_actions";
 
 const NAV_PRIMARY = [
   { href: "/dashboard", label: "Genel bakış", icon: LayoutDashboard, kbd: "1" },
@@ -39,6 +39,8 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const isAdmin =
+    session.user.role === "OWNER" || session.user.role === "ADMIN";
 
   return (
     <div className="flex min-h-dvh flex-1">
@@ -57,6 +59,13 @@ export default async function DashboardLayout({
             <NavItem key={item.href} {...item} />
           ))}
 
+          {isAdmin && (
+            <>
+              <SectionLabel className="mt-6">Yönetim</SectionLabel>
+              <NavItem href="/dashboard/org" label="Takım" icon={Users} />
+            </>
+          )}
+
           <SectionLabel className="mt-6">Öğren</SectionLabel>
           {NAV_SECONDARY.map((item) => (
             <NavItem key={item.href} {...item} />
@@ -66,11 +75,13 @@ export default async function DashboardLayout({
         <div className="border-t border-sidebar-border p-3">
           <div className="rounded-md bg-sidebar-accent/50 p-3 text-xs">
             <div className="eyebrow text-sidebar-accent-foreground">
-              MVP build
+              {isAdmin ? "Yönetici" : "Çalışma alanı"}
             </div>
             <p className="mt-1.5 leading-relaxed text-muted-foreground">
-              Lokal dev önizlemesi. Production&apos;a çıkmadan önce
-              token&apos;ları şifrele &amp; rate limit ekle.
+              Token&apos;lar şifreli saklanır, AI üretimi rate-limit&apos;lidir.
+              {isAdmin
+                ? " Takım, projeler ve sağlayıcıları Yönetim'den düzenle."
+                : " Erişimin yöneticin tarafından tanımlanır."}
             </p>
           </div>
         </div>
@@ -101,7 +112,6 @@ export default async function DashboardLayout({
                 email: session.user.email,
                 image: session.user.image,
               }}
-              signOutAction={signOutAction}
             />
           </div>
         </header>

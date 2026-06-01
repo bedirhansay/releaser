@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { providerSchema } from "@/shared/api/provider-schema";
 import { prFilterSchema } from "@/shared/api/pr-filter-schema";
 import { POLICIES } from "@/shared/api/rate-limit";
 import { enforceDistributed } from "@/shared/api/rate-limit-distributed";
-import { generateReleaseFromPRsForUser } from "@/features/releases/releases.service";
+import { generateReleaseFromPRsForOrg } from "@/features/releases/releases.service";
 
 const bodySchema = z.object({
   provider: providerSchema,
@@ -17,12 +17,12 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await requireSessionUserId();
-    await enforceDistributed(`ai-generate:${userId}`, POLICIES.AI_GENERATE);
-    await enforceDistributed(`ai-quota:${userId}`, POLICIES.AI_DAILY_QUOTA);
+    const ctx = await requireSession();
+    await enforceDistributed(`ai-generate:${ctx.userId}`, POLICIES.AI_GENERATE);
+    await enforceDistributed(`ai-quota:${ctx.userId}`, POLICIES.AI_DAILY_QUOTA);
 
     const input = bodySchema.parse(await req.json());
-    const release = await generateReleaseFromPRsForUser(userId, input);
+    const release = await generateReleaseFromPRsForOrg(ctx.orgId, input);
     return apiOk({ release });
   } catch (err) {
     return handleApiError(err);

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,6 +44,12 @@ export function ProjectGenerateClient({ project }: { project: ProjectDTO }) {
   const [since, setSince] = useState("");
   const [until, setUntil] = useState("");
 
+  // Release-level responsibility/meta — prefilled from the project's defaults
+  // but set per release (each release can have different sign-off, risk, …).
+  const [version, setVersion] = useState("");
+  const [risk, setRisk] = useState(project.defaultRisk ?? "");
+  const [signOff, setSignOff] = useState(project.signOff ?? "");
+
   const [result, setResult] = useState<GeneratedProjectRelease | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
@@ -70,6 +77,11 @@ export function ProjectGenerateClient({ project }: { project: ProjectDTO }) {
         projectId: project.id,
         templateId: effectiveTemplateId,
         filter,
+        meta: {
+          version: version.trim() || undefined,
+          risk: risk.trim() || undefined,
+          signOff: signOff.trim() || undefined,
+        },
       });
       setResult(res);
       setTitle(res.title);
@@ -200,6 +212,42 @@ export function ProjectGenerateClient({ project }: { project: ProjectDTO }) {
                   />
                 </TabsContent>
               </Tabs>
+            </div>
+          </div>
+
+          {/* Release-level responsibility & meta (prefilled from project) */}
+          <div className="grid gap-4 border-t border-border/50 pt-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rel-version">Version</Label>
+              <Input
+                id="rel-version"
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                placeholder="örn. v2026-05-22"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rel-risk">Risk</Label>
+              <Input
+                id="rel-risk"
+                value={risk}
+                onChange={(e) => setRisk(e.target.value)}
+                placeholder="örn. MEDIUM"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="rel-signoff">Sign-off (bu release için)</Label>
+              <Textarea
+                id="rel-signoff"
+                value={signOff}
+                onChange={(e) => setSignOff(e.target.value)}
+                placeholder={"Code Owner: Efe\nQA: Kaan\nManagement: Berkay"}
+                className="min-h-16 font-mono text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                Sorumluluk release&apos;e özeldir — proje varsayılanından doldu,
+                bu release için düzenleyebilirsin.
+              </span>
             </div>
           </div>
 

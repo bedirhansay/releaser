@@ -100,10 +100,10 @@ export function GenerateForm({
           Release notlarını üretmeye başlamak için GitHub veya Bitbucket bağla.
         </p>
         <Link
-          href="/login"
+          href="/dashboard/settings"
           className="mt-3 inline-flex text-primary underline"
         >
-          Sağlayıcı bağlamak için giriş yap →
+          Ayarlar&apos;a git →
         </Link>
       </div>
     );

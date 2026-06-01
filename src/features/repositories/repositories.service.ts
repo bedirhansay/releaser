@@ -1,5 +1,5 @@
 import { prisma } from "@/infrastructure/db/prisma";
-import { resolveGitProviderForUser } from "@/core/git/resolve-provider";
+import { resolveGitProviderForOrg } from "@/core/git/resolve-provider";
 import type {
   GitProviderKind,
   ListPullRequestsParams,
@@ -11,52 +11,52 @@ export interface ListReposInput {
   page?: number;
 }
 
-export async function listUserRepositories(
-  userId: string,
+export async function listOrgRepositories(
+  orgId: string,
   provider: GitProviderKind,
   input: ListReposInput = {},
 ) {
-  const git = await resolveGitProviderForUser(userId, provider);
+  const git = await resolveGitProviderForOrg(orgId, provider);
   return git.getRepositories(input);
 }
 
 export async function listBranches(
-  userId: string,
+  orgId: string,
   provider: GitProviderKind,
   params: { owner: string; repo: string },
 ) {
-  const git = await resolveGitProviderForUser(userId, provider);
+  const git = await resolveGitProviderForOrg(orgId, provider);
   return git.getBranches(params);
 }
 
 export async function compareBranches(
-  userId: string,
+  orgId: string,
   provider: GitProviderKind,
   params: { owner: string; repo: string; base: string; head: string },
 ) {
-  const git = await resolveGitProviderForUser(userId, provider);
+  const git = await resolveGitProviderForOrg(orgId, provider);
   return git.compareBranches(params);
 }
 
 export async function listTags(
-  userId: string,
+  orgId: string,
   provider: GitProviderKind,
   params: { owner: string; repo: string },
 ) {
-  const git = await resolveGitProviderForUser(userId, provider);
+  const git = await resolveGitProviderForOrg(orgId, provider);
   return git.listTags(params);
 }
 
 export async function listPullRequests(
-  userId: string,
+  orgId: string,
   provider: GitProviderKind,
   params: ListPullRequestsParams,
 ) {
-  const git = await resolveGitProviderForUser(userId, provider);
+  const git = await resolveGitProviderForOrg(orgId, provider);
   return git.listPullRequests(params);
 }
 
-// Lightweight: returns just the provider kinds the user has linked, so the UI
+// Lightweight: returns just the provider kinds the org has linked, so the UI
 // can render the right picker without leaking access tokens.
 const PROVIDER_FROM_DB = {
   GITHUB: "github",
@@ -67,11 +67,21 @@ const PROVIDER_FROM_DB = {
 type DbProvider = keyof typeof PROVIDER_FROM_DB;
 
 export async function listLinkedProviders(
-  userId: string,
+  orgId: string,
 ): Promise<GitProviderKind[]> {
-  const connections = await prisma.gitConnection.findMany({
-    where: { userId },
-    select: { provider: true },
-  });
-  return connections.map((c) => PROVIDER_FROM_DB[c.provider as DbProvider]);
+  // Repo access can come from two places: an OAuth GitConnection, OR a GitHub
+  // App installation (which has no GitConnection row). Count both so the UI
+  // surfaces "github" when only the App is connected.
+  const [connections, ghInstall] = await Promise.all([
+    prisma.gitConnection.findMany({ where: { orgId }, select: { provider: true } }),
+    prisma.gitHubInstallation.findFirst({
+      where: { orgId, suspended: false },
+      select: { id: true },
+    }),
+  ]);
+  const providers = new Set(
+    connections.map((c) => PROVIDER_FROM_DB[c.provider as DbProvider]),
+  );
+  if (ghInstall) providers.add("github");
+  return [...providers];
 }
