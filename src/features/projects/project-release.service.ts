@@ -43,6 +43,15 @@ function versionFromFilter(filter: PRFilterMode): string | undefined {
   return filter.type === "between-tags" ? filter.headTag : undefined;
 }
 
+/**
+ * Renders an ISO "YYYY-MM-DD" date as Turkish "DD.MM.YYYY" for the doc meta.
+ * Passes through anything that isn't a clean ISO date untouched.
+ */
+function formatTrDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : value;
+}
+
 export interface ProjectReleaseRepoResult {
   repoFullName: string;
   role: string | null;
@@ -158,9 +167,15 @@ export async function generateProjectReleaseForOrg(
     sections: template.sections,
   });
 
+  // Prefer a clean "{product} {version}" title when a version is supplied,
+  // so the title never embeds the PR window. Falls back to the AI title.
+  const releaseTitle = input.meta?.version
+    ? `${project.name} ${input.meta.version}`
+    : aiOut.title;
+
   const relevantPRs = repoContexts.flatMap((r) => r.prLinks);
   const markdown = buildTemplateMarkdown({
-    title: aiOut.title,
+    title: releaseTitle,
     projectName: project.name,
     windowLabel,
     sections: template.sections.map((s) => ({
@@ -170,7 +185,9 @@ export async function generateProjectReleaseForOrg(
     meta: {
       product: project.name,
       version: input.meta?.version ?? versionFromFilter(input.filter),
-      date: input.meta?.date ?? new Date().toLocaleDateString("tr-TR"),
+      date: input.meta?.date
+        ? formatTrDate(input.meta.date)
+        : new Date().toLocaleDateString("tr-TR"),
       risk: input.meta?.risk ?? project.defaultRisk,
     },
     // Release-level responsibility: per-release sign-off overrides the project
@@ -181,7 +198,7 @@ export async function generateProjectReleaseForOrg(
   });
 
   return {
-    title: aiOut.title,
+    title: releaseTitle,
     markdown,
     sections: aiOut.sections,
     windowLabel,

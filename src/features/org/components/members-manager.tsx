@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Crown, Loader2, Plus, Trash2, UsersRound } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -37,6 +46,13 @@ const ROLE_LABEL: Record<Role, string> = {
   MEMBER: "Üye",
 };
 
+function initials(value: string) {
+  const parts = value.trim().split(/[\s@.]+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
 export function MembersManager() {
   const qc = useQueryClient();
   const members = useMembers();
@@ -66,76 +82,95 @@ export function MembersManager() {
     }
   };
 
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-medium">Üyeler</h2>
-          <p className="text-sm text-muted-foreground">
-            Ekip üyelerini ekle, rollerini yönet.
-          </p>
-        </div>
-        <AddMemberDialog onDone={invalidate} />
-      </div>
+  const data = members.data ?? [];
 
-      {members.isLoading ? (
-        <p className="text-sm text-muted-foreground">Yükleniyor…</p>
-      ) : members.error ? (
-        <p className="text-sm text-destructive">
-          {(members.error as Error).message}
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-border/70">
-          {(members.data ?? []).map((m, i) => (
-            <div
-              key={m.membershipId}
-              className={[
-                "grid grid-cols-[1fr_10rem_auto] items-center gap-3 px-4 py-3 text-sm",
-                i > 0 ? "border-t border-border/60" : "",
-              ].join(" ")}
-            >
-              <div className="min-w-0">
-                <div className="truncate font-medium">
-                  {m.name ?? m.email ?? m.userId}
-                </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {m.email}
-                </div>
-              </div>
-              {m.role === "OWNER" ? (
-                <span className="text-xs font-medium text-primary">
-                  {ROLE_LABEL.OWNER}
-                </span>
-              ) : (
-                <Select
-                  value={m.role}
-                  onValueChange={(v) => onRoleChange(m.membershipId, v as Role)}
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="border-b">
+        <CardTitle>Üyeler</CardTitle>
+        <CardDescription>Ekip üyelerini ekle, rollerini yönet.</CardDescription>
+        <CardAction>
+          <AddMemberDialog onDone={invalidate} />
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="px-0">
+        {members.isLoading ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">Yükleniyor…</p>
+        ) : members.error ? (
+          <p className="px-4 py-3 text-sm text-destructive">
+            {(members.error as Error).message}
+          </p>
+        ) : data.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+            <UsersRound className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              Henüz üye yok. İlk üyeyi ekleyerek başla.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/60">
+            {data.map((m) => {
+              const label = m.name ?? m.email ?? m.userId;
+              return (
+                <li
+                  key={m.membershipId}
+                  className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
                 >
-                  <SelectTrigger size="sm" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ADMIN">{ROLE_LABEL.ADMIN}</SelectItem>
-                    <SelectItem value="MEMBER">{ROLE_LABEL.MEMBER}</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={m.role === "OWNER"}
-                onClick={() => onRemove(m.membershipId)}
-                aria-label="Üyeyi kaldır"
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                    {initials(label)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{label}</div>
+                    {m.email && (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {m.email}
+                      </div>
+                    )}
+                  </div>
+                  {m.role === "OWNER" ? (
+                    <Badge variant="secondary">
+                      <Crown />
+                      {ROLE_LABEL.OWNER}
+                    </Badge>
+                  ) : (
+                    <Select
+                      value={m.role}
+                      onValueChange={(v) =>
+                        onRoleChange(m.membershipId, v as Role)
+                      }
+                    >
+                      <SelectTrigger size="sm" className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ADMIN">
+                          {ROLE_LABEL.ADMIN}
+                        </SelectItem>
+                        <SelectItem value="MEMBER">
+                          {ROLE_LABEL.MEMBER}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={m.role === "OWNER"}
+                    onClick={() => onRemove(m.membershipId)}
+                    aria-label="Üyeyi kaldır"
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -3,6 +3,7 @@ import { requireRole, requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import {
   createTemplateForOrg,
+  ensureDefaultTemplateForOrg,
   listTemplatesForOrg,
 } from "@/features/templates/templates.service";
 import { createTemplateSchema } from "@/types/template-schemas";
@@ -11,6 +12,11 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireSession();
     const projectId = req.nextUrl.searchParams.get("projectId") ?? undefined;
+    // Guarantee the org always has at least the default (finsel) template so
+    // the picker is never empty on a fresh org. Idempotent — only seeds once.
+    if (!projectId) {
+      await ensureDefaultTemplateForOrg(ctx.orgId, ctx.userId);
+    }
     const templates = await listTemplatesForOrg(ctx.orgId, { projectId });
     return apiOk({ templates });
   } catch (err) {

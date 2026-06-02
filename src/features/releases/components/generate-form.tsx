@@ -18,6 +18,7 @@ import {
   useRepositories,
 } from "@/features/repositories/hooks";
 import { RepoCombobox } from "@/features/repositories/components/repo-combobox";
+import { ProjectRepoSelect } from "@/features/repositories/components/project-repo-select";
 import type { GitProviderKind } from "@/core/git/types";
 
 const PROVIDER_LABEL: Record<GitProviderKind, string> = {
@@ -44,15 +45,20 @@ export function GenerateForm({
   isPending?: boolean;
 }) {
   const providers = useLinkedProviders();
-  const [provider, setProvider] = useState<GitProviderKind | null>(null);
+  // Default to Bitbucket — the primary provider for this wizard.
+  const [provider, setProvider] = useState<GitProviderKind | null>("bitbucket");
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [base, setBase] = useState<string | null>(null);
   const [head, setHead] = useState<string | null>(null);
   const [prevProvider, setPrevProvider] = useState(provider);
 
-  // Auto-pick the first linked provider, and reset dependent selections when
-  // the provider changes — both during render, avoiding setState-in-effect.
-  if (!provider && providers.data && providers.data.length > 0) {
+  // If the default provider isn't linked, fall back to the first linked one so
+  // the form stays usable. Done during render, avoiding setState-in-effect.
+  if (
+    providers.data &&
+    providers.data.length > 0 &&
+    (!provider || !providers.data.includes(provider))
+  ) {
     setProvider(providers.data[0]);
   }
   if (provider !== prevProvider) {
@@ -65,10 +71,20 @@ export function GenerateForm({
   // Search is now driven inside the combobox via cmdk's internal filter, so we
   // just fetch the whole (recent) repo list once per provider.
   const repos = useRepositories(provider ?? "github", "");
-  const selected = useMemo(
-    () => repos.data?.find((r) => r.fullName === repoFullName) ?? null,
-    [repos.data, repoFullName],
-  );
+  // Prefer a repo from the fetched list, but fall back to splitting the raw
+  // "owner/repo" value so manually-entered repos (listing unavailable) still
+  // produce a usable { owner, name } selection downstream.
+  const selected = useMemo(() => {
+    if (!repoFullName) return null;
+    const fromList = repos.data?.find((r) => r.fullName === repoFullName);
+    if (fromList) return fromList;
+    const slash = repoFullName.indexOf("/");
+    if (slash <= 0) return null;
+    const owner = repoFullName.slice(0, slash);
+    const name = repoFullName.slice(slash + 1);
+    if (!owner || !name) return null;
+    return { owner, name } as { owner: string; name: string };
+  }, [repos.data, repoFullName]);
   const branches = useBranches(
     provider ?? "github",
     selected?.owner ?? null,
@@ -147,18 +163,35 @@ export function GenerateForm({
 
       <div className="grid gap-2">
         <Label>Repo</Label>
+        {/* Primary, reliable source: repos the user already defined in their
+            projects (our own DB). Selecting one syncs provider + owner/repo and
+            feeds the exact same downstream contract as the manual combobox. */}
+        <ProjectRepoSelect
+          value={selected ? { provider: provider ?? "github", ...selected } : null}
+          onSelect={(entry) => {
+            const fullName = `${entry.owner}/${entry.name}`;
+            // Advance prevProvider so the during-render reset doesn't clobber
+            // the repo we're setting alongside the provider change.
+            setProvider(entry.provider);
+            setPrevProvider(entry.provider);
+            setRepoFullName(fullName);
+            setBase(null);
+            setHead(null);
+          }}
+        />
+        {/* Secondary / fallback: type owner/repo manually (or another repo). */}
         <RepoCombobox
+          key={provider ?? "none"}
           value={repoFullName}
           onChange={(fullName) => {
-            setRepoFullName(fullName);
+            setRepoFullName(fullName || null);
             setBase(null);
             setHead(null);
           }}
           repos={repos.data ?? []}
           isLoading={repos.isLoading || providers.isLoading}
-          error={
-            repos.error ? (repos.error as Error).message : null
-          }
+          error={repos.error ? (repos.error as Error).message : null}
+          manualFallback
         />
       </div>
 

@@ -95,14 +95,14 @@ function RepoRowItem({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-card/40 p-2">
-      <div className="grid grid-cols-[7rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-2">
+      <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[7rem_minmax(0,1.6fr)_minmax(0,1fr)_auto]">
         <Select
           value={row.provider}
           onValueChange={(v) =>
             onChange({ provider: v as GitProviderKind, owner: "", name: "" })
           }
         >
-          <SelectTrigger className="w-full" size="sm">
+          <SelectTrigger className="w-full min-w-0" size="sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -114,45 +114,6 @@ function RepoRowItem({
           </SelectContent>
         </Select>
 
-        {row.manual ? (
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              value={row.owner}
-              onChange={(e) => onChange({ owner: e.target.value })}
-              placeholder="owner"
-              aria-label="Repo sahibi"
-            />
-            <Input
-              value={row.name}
-              onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="repo"
-              aria-label="Repo adı"
-            />
-          </div>
-        ) : (
-          <RepoCombobox
-            value={value}
-            onChange={(fullName) => {
-              const slash = fullName.indexOf("/");
-              if (slash === -1) return;
-              onChange({
-                owner: fullName.slice(0, slash),
-                name: fullName.slice(slash + 1),
-              });
-            }}
-            repos={list}
-            isLoading={repos.isLoading}
-            error={repos.error ? (repos.error as Error).message : null}
-          />
-        )}
-
-        <Input
-          value={row.role}
-          onChange={(e) => onChange({ role: e.target.value })}
-          placeholder="backend / frontend"
-          aria-label="Rol"
-        />
-
         <Button
           type="button"
           variant="ghost"
@@ -160,13 +121,57 @@ function RepoRowItem({
           onClick={onRemove}
           disabled={!canRemove}
           aria-label="Repo'yu kaldır"
-          className="text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground hover:text-destructive sm:order-last"
         >
           <X className="h-4 w-4" />
         </Button>
+
+        {row.manual ? (
+          <div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 sm:col-span-1">
+            <Input
+              value={row.owner}
+              onChange={(e) => onChange({ owner: e.target.value })}
+              placeholder="owner"
+              aria-label="Repo sahibi"
+              className="min-w-0"
+            />
+            <Input
+              value={row.name}
+              onChange={(e) => onChange({ name: e.target.value })}
+              placeholder="repo"
+              aria-label="Repo adı"
+              className="min-w-0"
+            />
+          </div>
+        ) : (
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            <RepoCombobox
+              value={value}
+              onChange={(fullName) => {
+                const slash = fullName.indexOf("/");
+                if (slash === -1) return;
+                onChange({
+                  owner: fullName.slice(0, slash),
+                  name: fullName.slice(slash + 1),
+                });
+              }}
+              repos={list}
+              isLoading={repos.isLoading}
+              error={repos.error ? (repos.error as Error).message : null}
+            />
+          </div>
+        )}
+
+        <Input
+          value={row.role}
+          onChange={(e) => onChange({ role: e.target.value })}
+          placeholder="backend / frontend"
+          aria-label="Rol"
+          className="col-span-2 min-w-0 sm:col-span-1"
+        />
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[7.5rem] text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:pl-[7.5rem]">
         {showConnectHint && (
           <span>
             Erişilebilir repo yok —{" "}
@@ -288,7 +293,7 @@ export function ProjectFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Projeyi düzenle" : "Yeni proje"}
@@ -301,7 +306,7 @@ export function ProjectFormDialog({
 
         <form
           onSubmit={handleSubmit}
-          className="grid max-h-[78vh] gap-5 overflow-y-auto"
+          className="grid gap-5"
         >
           <div className="grid gap-2">
             <Label htmlFor="project-name">Proje adı</Label>
