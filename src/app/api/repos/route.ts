@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { providerSchema } from "@/shared/api/provider-schema";
-import { listUserRepositories } from "@/features/repositories/repositories.service";
+import { listOrgRepositories } from "@/features/repositories/repositories.service";
 
 const querySchema = z.object({
   provider: providerSchema,
@@ -14,11 +14,11 @@ const querySchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireSessionUserId();
+    const ctx = await requireSession();
     const { provider, ...rest } = querySchema.parse(
       Object.fromEntries(req.nextUrl.searchParams),
     );
-    const repos = await listUserRepositories(userId, provider, rest);
+    const repos = await listOrgRepositories(ctx.orgId, provider, rest);
     return apiOk({ repos });
   } catch (err) {
     return handleApiError(err);

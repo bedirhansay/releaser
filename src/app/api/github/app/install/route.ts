@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireRole, requireSession } from "@/shared/api/require-session";
 import { handleApiError } from "@/shared/api/response";
 import { getInstallUrl } from "@/infrastructure/github/app-auth";
 
@@ -8,7 +8,8 @@ import { getInstallUrl } from "@/infrastructure/github/app-auth";
 // redirects the user to GitHub's installation screen where they pick repos.
 export async function GET() {
   try {
-    await requireSessionUserId();
+    const session = await requireSession();
+    requireRole(session, "OWNER", "ADMIN");
     const state = randomUUID();
     const url = getInstallUrl(state);
     if (!url) {

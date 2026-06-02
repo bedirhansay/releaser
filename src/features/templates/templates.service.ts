@@ -59,13 +59,33 @@ function mapTemplate(row: {
   };
 }
 
-export async function createTemplateForUser(
-  userId: string,
+/**
+ * Ensures a template's `projectId`, when set, points at a project in the same
+ * org. Without this a caller could link their template to another org's project
+ * id (the FK only references Project.id), leaking existence / creating a
+ * cross-tenant reference.
+ */
+async function assertProjectInOrg(orgId: string, projectId?: string | null) {
+  if (!projectId) return;
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, orgId },
+    select: { id: true },
+  });
+  if (!project) {
+    throw new Error("Project not found in this organization.");
+  }
+}
+
+export async function createTemplateForOrg(
+  orgId: string,
+  createdById: string,
   input: CreateTemplateInput,
 ): Promise<TemplateRecord> {
+  await assertProjectInOrg(orgId, input.projectId);
   const created = await prisma.releaseTemplate.create({
     data: {
-      userId,
+      orgId,
+      createdById,
       name: input.name,
       description: input.description ?? null,
       projectId: input.projectId ?? null,
@@ -79,13 +99,13 @@ export async function createTemplateForUser(
   return mapTemplate(created);
 }
 
-export async function listTemplatesForUser(
-  userId: string,
+export async function listTemplatesForOrg(
+  orgId: string,
   opts?: { projectId?: string },
 ): Promise<TemplateRecord[]> {
   const rows = await prisma.releaseTemplate.findMany({
     where: {
-      userId,
+      orgId,
       ...(opts?.projectId ? { projectId: opts.projectId } : {}),
     },
     // Default template floats to the top; otherwise most recently touched first.
@@ -94,25 +114,26 @@ export async function listTemplatesForUser(
   return rows.map(mapTemplate);
 }
 
-export async function getTemplateForUser(
-  userId: string,
+export async function getTemplateForOrg(
+  orgId: string,
   id: string,
 ): Promise<TemplateRecord | null> {
   const row = await prisma.releaseTemplate.findFirst({
-    where: { id, userId },
+    where: { id, orgId },
   });
   return row ? mapTemplate(row) : null;
 }
 
-// Ownership is enforced by scoping the `updateMany` to `{ id, userId }`, so a
-// user can never patch another user's template. Returns whether a row matched.
-export async function updateTemplateForUser(
-  userId: string,
+// Scoped to `{ id, orgId }` so a template can only be patched within its own
+// org. Returns whether a row matched.
+export async function updateTemplateForOrg(
+  orgId: string,
   id: string,
   patch: UpdateTemplateInput,
 ): Promise<boolean> {
+  await assertProjectInOrg(orgId, patch.projectId);
   const result = await prisma.releaseTemplate.updateMany({
-    where: { id, userId },
+    where: { id, orgId },
     data: {
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.description !== undefined
@@ -131,29 +152,30 @@ export async function updateTemplateForUser(
   return result.count > 0;
 }
 
-export async function deleteTemplateForUser(
-  userId: string,
+export async function deleteTemplateForOrg(
+  orgId: string,
   id: string,
 ): Promise<boolean> {
   const result = await prisma.releaseTemplate.deleteMany({
-    where: { id, userId },
+    where: { id, orgId },
   });
   return result.count > 0;
 }
 
 /**
- * Idempotently guarantees a user has at least one template. On first run we
+ * Idempotently guarantees an org has at least one template. On first run we
  * seed the opinionated finsel starter as the default; thereafter we just hand
  * back the existing default (or the first available) template.
  */
-export async function ensureDefaultTemplateForUser(
-  userId: string,
+export async function ensureDefaultTemplateForOrg(
+  orgId: string,
+  createdById: string,
 ): Promise<TemplateRecord> {
-  const existing = await listTemplatesForUser(userId);
+  const existing = await listTemplatesForOrg(orgId);
   if (existing.length > 0) {
     return existing.find((t) => t.isDefault) ?? existing[0];
   }
-  return createTemplateForUser(userId, {
+  return createTemplateForOrg(orgId, createdById, {
     name: "Varsayılan şablon (finsel)",
     sections: DEFAULT_TEMPLATE_SECTIONS,
     isDefault: true,

@@ -1,17 +1,25 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { prFilterSchema } from "@/shared/api/pr-filter-schema";
 import { POLICIES } from "@/shared/api/rate-limit";
 import { enforceDistributed } from "@/shared/api/rate-limit-distributed";
-import { generateProjectReleaseForUser } from "@/features/projects/project-release.service";
+import { generateProjectReleaseForOrg } from "@/features/projects/project-release.service";
 
 const paramsSchema = z.object({ id: z.string().min(1) });
 
 const bodySchema = z.object({
   templateId: z.string().min(1).optional(),
   filter: prFilterSchema,
+  meta: z
+    .object({
+      version: z.string().trim().max(60).optional(),
+      date: z.string().trim().max(60).optional(),
+      risk: z.string().trim().max(40).optional(),
+      signOff: z.string().trim().max(2000).optional(),
+    })
+    .optional(),
 });
 
 export async function POST(
@@ -19,16 +27,17 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
-    await enforceDistributed(`ai-generate:${userId}`, POLICIES.AI_GENERATE);
-    await enforceDistributed(`ai-quota:${userId}`, POLICIES.AI_DAILY_QUOTA);
+    const session = await requireSession();
+    await enforceDistributed(`ai-generate:${session.userId}`, POLICIES.AI_GENERATE);
+    await enforceDistributed(`ai-quota:${session.userId}`, POLICIES.AI_DAILY_QUOTA);
 
     const { id } = paramsSchema.parse(await ctx.params);
-    const { templateId, filter } = bodySchema.parse(await req.json());
-    const release = await generateProjectReleaseForUser(userId, {
+    const { templateId, filter, meta } = bodySchema.parse(await req.json());
+    const release = await generateProjectReleaseForOrg(session, {
       projectId: id,
       templateId,
       filter,
+      meta,
     });
     return apiOk({ release });
   } catch (err) {

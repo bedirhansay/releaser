@@ -28,6 +28,7 @@ import {
   DEFAULT_TEMPLATE_SECTIONS,
   type TemplateSection,
 } from "@/types/template";
+import { createTemplateSchema } from "@/types/template-schemas";
 
 /** Deep-copy the starter sections, giving each a fresh id for a new template. */
 function freshDefaultSections(): TemplateSection[] {
@@ -111,7 +112,9 @@ export function TemplateEditorDialog({
   const handleSubmit = async () => {
     if (!canSubmit || isPending) return;
 
-    const payload = {
+    // Validate with the schema the API enforces so limit errors surface inline
+    // rather than as a generic 422.
+    const parsed = createTemplateSchema.safeParse({
       name: name.trim(),
       description: description.trim() || undefined,
       sections: filledSections.map((s) => ({
@@ -119,7 +122,12 @@ export function TemplateEditorDialog({
         heading: s.heading.trim(),
         instruction: s.instruction.trim(),
       })),
-    };
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Geçersiz form");
+      return;
+    }
+    const payload = parsed.data;
 
     try {
       if (template) {

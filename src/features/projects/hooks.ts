@@ -17,6 +17,9 @@ export interface ProjectDTO {
   name: string;
   slug: string | null;
   description: string | null;
+  defaultRisk?: string | null;
+  monitoringLinks?: string | null;
+  signOff?: string | null;
   repos: ProjectRepoDTO[];
   releaseCount?: number;
   createdAt?: string;
@@ -52,6 +55,9 @@ export interface ProjectInput {
   name: string;
   slug?: string;
   description?: string;
+  defaultRisk?: string;
+  monitoringLinks?: string;
+  signOff?: string;
   repos: Array<{
     provider: GitProviderKind;
     owner: string;
@@ -116,16 +122,23 @@ export function useGenerateProjectRelease() {
       projectId,
       templateId,
       filter,
+      meta,
     }: {
       projectId: string;
       templateId?: string;
       filter: PRFilterMode;
+      meta?: {
+        version?: string;
+        date?: string;
+        risk?: string;
+        signOff?: string;
+      };
     }) =>
       fetchJson<{ release: GeneratedProjectRelease }>(
         `/api/projects/${projectId}/generate`,
         {
           method: "POST",
-          body: JSON.stringify({ templateId, filter }),
+          body: JSON.stringify({ templateId, filter, meta }),
         },
       ).then((r) => r.release),
   });

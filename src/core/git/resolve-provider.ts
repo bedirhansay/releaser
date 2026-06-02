@@ -21,16 +21,16 @@ const PROVIDER_TO_DB: Record<
   gitlab: "GITLAB",
 };
 
-export async function resolveGitProviderForUser(
-  userId: string,
+export async function resolveGitProviderForOrg(
+  orgId: string,
   kind: GitProviderKind = "github",
 ): Promise<GitProvider> {
   // Prefer a GitHub App installation (Coolify-style, least-privilege per-repo
-  // access via short-lived tokens) when the App is configured and the user has
+  // access via short-lived tokens) when the App is configured and the org has
   // installed it. Fall back to the OAuth connection otherwise.
   if (kind === "github" && isGitHubAppConfigured()) {
     const installation = await prisma.gitHubInstallation.findFirst({
-      where: { userId, suspended: false },
+      where: { orgId, suspended: false },
       orderBy: { createdAt: "desc" },
       select: { installationId: true },
     });
@@ -41,13 +41,13 @@ export async function resolveGitProviderForUser(
   }
 
   const connection = await prisma.gitConnection.findUnique({
-    where: { userId_provider: { userId, provider: PROVIDER_TO_DB[kind] } },
+    where: { orgId_provider: { orgId, provider: PROVIDER_TO_DB[kind] } },
   });
   if (!connection) {
     throw new GitAuthError(
       kind === "github"
         ? "No GitHub access. Install the GitHub App or connect via OAuth."
-        : `No ${kind} connection linked for this user`,
+        : `No ${kind} connection linked for this organization`,
     );
   }
 

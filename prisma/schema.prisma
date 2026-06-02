@@ -11,6 +11,100 @@ datasource db {
   provider = "postgresql"
 }
 
+// ---------- Org / RBAC ----------
+// Roles are scoped to an organization via Membership. OWNER is the top role
+// (cannot be removed if last); ADMIN manages members/groups/projects; MEMBER
+// only sees projects granted to them (directly or via a group).
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// A tenant. Resources (projects, templates, releases, git/AI connections) are
+// owned by an Organization, not an individual — so a team shares one set.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships     Membership[]
+  groups          Group[]
+  projects        Project[]
+  templates       ReleaseTemplate[]
+  releases        ReleaseHistory[]
+  gitConnections  GitConnection[]
+  ghInstallations GitHubInstallation[]
+  aiSetting       AiSetting?
+}
+
+// Links a user to an organization with a role.
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+// A named group of members within an org (e.g. "frontend"). Groups can be
+// granted access to projects, so access is managed per-team, not per-person.
+model Group {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org     Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+  access  ProjectAccess[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// Grants a project to a group OR an individual user. Exactly one of groupId /
+// userId is set per row (the null column lets the unique index coexist).
+model ProjectAccess {
+  id        String   @id @default(cuid())
+  projectId String
+  groupId   String?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, groupId])
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([groupId])
+  @@index([userId])
+}
+
 // ---------- Auth.js (NextAuth) models ----------
 model User {
   id            String    @id @default(cuid())
@@ -18,15 +112,18 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  // Set for credentials (email/password) login — e.g. the seeded superadmin
+  // and admin-provisioned members. Null for OAuth-only identities.
+  passwordHash  String?
 
-  accounts        Account[]
-  sessions        Session[]
-  gitConnections  GitConnection[]
-  releases        ReleaseHistory[]
-  projects        Project[]
-  templates       ReleaseTemplate[]
-  aiSetting       AiSetting?
-  ghInstallations GitHubInstallation[]
+  accounts         Account[]
+  sessions         Session[]
+  memberships      Membership[]
+  groupMemberships GroupMember[]
+  projectAccess    ProjectAccess[]
+  createdProjects  Project[]         @relation("ProjectCreatedBy")
+  createdTemplates ReleaseTemplate[] @relation("TemplateCreatedBy")
+  createdReleases  ReleaseHistory[]  @relation("ReleaseCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -38,7 +135,7 @@ model User {
 // login/identity; this grants repo data access.
 model GitHubInstallation {
   id                  String   @id @default(cuid())
-  userId              String
+  orgId               String
   installationId      Int      @unique
   accountLogin        String?
   accountType         String?
@@ -47,9 +144,9 @@ model GitHubInstallation {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([orgId])
 }
 
 // Per-user "bring your own LLM" configuration. The API key is encrypted at
@@ -57,14 +154,14 @@ model GitHubInstallation {
 // generation falls back to the shared AI_* environment values.
 model AiSetting {
   id           String   @id @default(cuid())
-  userId       String   @unique
+  orgId        String   @unique
   apiKeyCipher String?  @db.Text
   baseUrl      String?
   model        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }
 
 model Account {
@@ -110,18 +207,18 @@ enum GitProviderKind {
 }
 
 model GitConnection {
-  id          String          @id @default(cuid())
-  userId      String
-  provider    GitProviderKind
+  id           String          @id @default(cuid())
+  orgId        String
+  provider     GitProviderKind
   accountLogin String?
-  accessToken String          @db.Text
-  scope       String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  accessToken  String          @db.Text
+  scope        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, provider])
+  @@unique([orgId, provider])
 }
 
 // ---------- Projects & templates ----------
@@ -130,20 +227,29 @@ model GitConnection {
 // frontend) so a single release can span them all.
 model Project {
   id          String   @id @default(cuid())
-  userId      String
+  orgId       String
+  createdById String?
   name        String
   slug        String?
   description String?
+  // Release-doc metadata: defaults injected into generated release documents.
+  // defaultRisk e.g. "MEDIUM"; monitoringLinks + signOff are newline-separated
+  // free text (one "Label: URL" / "Role: Name" per line).
+  defaultRisk     String?
+  monitoringLinks String? @db.Text
+  signOff         String? @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?             @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   repos     ProjectRepo[]
   templates ReleaseTemplate[]
   releases  ReleaseHistory[]
+  access    ProjectAccess[]
 
-  @@unique([userId, name])
-  @@index([userId])
+  @@unique([orgId, name])
+  @@index([orgId])
 }
 
 // A repository inside a Project, optionally role-tagged ("backend",
@@ -168,7 +274,8 @@ model ProjectRepo {
 // at generate time, so the document structure is whatever the user defines.
 model ReleaseTemplate {
   id          String   @id @default(cuid())
-  userId      String
+  orgId       String
+  createdById String?
   projectId   String?
   name        String
   description String?
@@ -177,16 +284,18 @@ model ReleaseTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation("TemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
+  @@index([orgId])
   @@index([projectId])
 }
 
 model ReleaseHistory {
   id          String          @id @default(cuid())
-  userId      String
+  orgId       String
+  createdById String?
   projectId   String?
   templateId  String?
   provider    GitProviderKind
@@ -205,10 +314,11 @@ model ReleaseHistory {
   modelUsed   String?
   createdAt   DateTime        @default(now())
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy User?        @relation("ReleaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  @@index([userId, createdAt])
-  @@index([userId, repoOwner, repoName])
+  @@index([orgId, createdAt])
+  @@index([orgId, repoOwner, repoName])
   @@index([projectId])
 }

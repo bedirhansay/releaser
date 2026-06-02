@@ -8,7 +8,7 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { listReleasesForUser } from "@/features/releases/releases.service";
+import { listReleasesForOrg } from "@/features/releases/releases.service";
 import { auth } from "@/auth";
 import {
   Card,
@@ -22,9 +22,19 @@ import { cn } from "@/lib/utils";
 
 export default async function DashboardHome() {
   const session = await auth();
-  const recent = session?.user?.id
-    ? (await listReleasesForUser(session.user.id, { limit: 5 })).items
-    : [];
+  const recent =
+    session?.user?.id && session.user.orgId && session.user.role
+      ? (
+          await listReleasesForOrg(
+            {
+              userId: session.user.id,
+              orgId: session.user.orgId,
+              role: session.user.role,
+            },
+            { limit: 5 },
+          )
+        ).items
+      : [];
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">

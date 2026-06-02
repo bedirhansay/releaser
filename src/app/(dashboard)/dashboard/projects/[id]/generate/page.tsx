@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "@/auth";
-import { getProjectForUser } from "@/features/projects/projects.service";
+import { getProjectForOrg } from "@/features/projects/projects.service";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ProjectGenerateClient } from "@/features/projects/components/project-generate-client";
@@ -14,9 +14,17 @@ export default async function ProjectGeneratePage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const project = session?.user?.id
-    ? await getProjectForUser(session.user.id, id)
-    : null;
+  const project =
+    session?.user?.id && session.user.orgId && session.user.role
+      ? await getProjectForOrg(
+          {
+            userId: session.user.id,
+            orgId: session.user.orgId,
+            role: session.user.role,
+          },
+          id,
+        )
+      : null;
   if (!project) notFound();
 
   return (
