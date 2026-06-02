@@ -5,7 +5,10 @@ import type { OAuthConfig } from "next-auth/providers";
 //
 // Setup (Workspace settings → OAuth consumers):
 //   Callback URL: <APP_URL>/api/auth/callback/bitbucket
-//   Permissions:  Account (read), Email (read), Repositories (read)
+//   Permissions:  Account (read), Repositories (read)
+// We only request `account repository` — email is fetched best-effort from
+// /2.0/user/emails and tolerated if the consumer doesn't grant it, so the
+// `email` scope is intentionally NOT requested (keeps consumer setup minimal).
 export interface BitbucketProfile {
   uuid: string;
   username: string;
@@ -29,7 +32,7 @@ export function Bitbucket(options: {
     clientSecret: options.clientSecret,
     authorization: {
       url: "https://bitbucket.org/site/oauth2/authorize",
-      params: { scope: "account email repository" },
+      params: { scope: "account repository" },
     },
     token: "https://bitbucket.org/site/oauth2/access_token",
     userinfo: {

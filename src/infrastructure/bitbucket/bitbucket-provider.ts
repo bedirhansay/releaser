@@ -149,17 +149,48 @@ export class BitbucketProvider implements GitProvider {
 
   async getRepositories(params: ListReposParams = {}): Promise<Repository[]> {
     const perPage = Math.min(params.perPage ?? 50, 100);
-    const qs = new URLSearchParams({
-      role: "member",
-      pagelen: String(perPage),
-      sort: "-updated_on",
-    });
-    if (params.search) qs.set("q", `name ~ "${params.search}"`);
-    const repos = await this.paginate<BBRepo>(
-      `/repositories?${qs.toString()}`,
-      perPage,
+
+    // CHANGE-2770 (Apr 14 2026): the cross-workspace `GET /2.0/repositories?
+    // role=member` was removed. We now enumerate the user's workspaces, then
+    // list repos per workspace — both workspace-scoped endpoints that remain
+    // supported. If even workspace enumeration is unavailable, degrade to an
+    // empty list so the UI falls back to manual owner/repo entry rather than
+    // surfacing a 410.
+    let workspaceSlugs: string[];
+    try {
+      const workspaces = await this.paginate<{ slug: string }>(
+        `/workspaces?pagelen=100`,
+        100,
+      );
+      workspaceSlugs = workspaces.map((w) => w.slug);
+    } catch {
+      return [];
+    }
+
+    const collected: BBRepo[] = [];
+    for (const slug of workspaceSlugs) {
+      if (collected.length >= perPage) break;
+      const qs = new URLSearchParams({
+        pagelen: String(perPage),
+        sort: "-updated_on",
+      });
+      if (params.search) qs.set("q", `name ~ "${params.search}"`);
+      try {
+        const repos = await this.paginate<BBRepo>(
+          `/repositories/${slug}?${qs.toString()}`,
+          perPage,
+        );
+        collected.push(...repos);
+      } catch {
+        // A workspace we can't read shouldn't break the whole listing.
+      }
+    }
+
+    // Merge across workspaces, most recently updated first, then cap.
+    collected.sort((a, b) =>
+      (b.updated_on ?? "").localeCompare(a.updated_on ?? ""),
     );
-    return repos.map<Repository>((r) => ({
+    return collected.slice(0, perPage).map<Repository>((r) => ({
       id: r.uuid,
       fullName: r.full_name,
       name: r.name,
