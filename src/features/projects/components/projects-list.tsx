@@ -33,7 +33,7 @@ import {
 } from "@/features/projects/hooks";
 import { ProjectFormDialog } from "@/features/projects/components/project-form";
 
-export function ProjectsList() {
+export function ProjectsList({ isAdmin }: { isAdmin: boolean }) {
   const query = useProjects();
   const projects = query.data ?? [];
 
@@ -49,30 +49,38 @@ export function ProjectsList() {
     );
   }
 
-  if (projects.length === 0) return <EmptyState />;
+  if (projects.length === 0) return <EmptyState isAdmin={isAdmin} />;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <ProjectFormDialog
-          trigger={
-            <Button className="gap-1.5">
-              <Plus className="h-4 w-4" /> Yeni proje
-            </Button>
-          }
-        />
-      </div>
+      {isAdmin && (
+        <div className="flex justify-end">
+          <ProjectFormDialog
+            trigger={
+              <Button className="gap-1.5">
+                <Plus className="h-4 w-4" /> Yeni proje
+              </Button>
+            }
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
+          <ProjectCard key={project.id} project={project} isAdmin={isAdmin} />
         ))}
       </div>
     </div>
   );
 }
 
-function ProjectCard({ project }: { project: ProjectDTO }) {
+function ProjectCard({
+  project,
+  isAdmin,
+}: {
+  project: ProjectDTO;
+  isAdmin: boolean;
+}) {
   return (
     <Card className="ring-border/70 transition-colors hover:ring-border">
       <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -119,15 +127,19 @@ function ProjectCard({ project }: { project: ProjectDTO }) {
           >
             <Wand2 className="h-3.5 w-3.5" /> Release üret
           </Link>
-          <ProjectFormDialog
-            project={project}
-            trigger={
-              <Button variant="ghost" size="sm" className="gap-1.5">
-                <Pencil className="h-3.5 w-3.5" /> Düzenle
-              </Button>
-            }
-          />
-          <DeleteProjectButton project={project} />
+          {isAdmin && (
+            <>
+              <ProjectFormDialog
+                project={project}
+                trigger={
+                  <Button variant="ghost" size="sm" className="gap-1.5">
+                    <Pencil className="h-3.5 w-3.5" /> Düzenle
+                  </Button>
+                }
+              />
+              <DeleteProjectButton project={project} />
+            </>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -222,7 +234,7 @@ function ListSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="border-dashed ring-border/60">
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -231,16 +243,19 @@ function EmptyState() {
         </div>
         <div className="font-serif text-xl italic">Henüz proje yok</div>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Bir proje birden fazla repo&apos;yu tek release altında toplar. İlk
-          projeni oluşturarak başla.
+          {isAdmin
+            ? "Bir proje birden fazla repo'yu tek release altında toplar. İlk projeni oluşturarak başla."
+            : "Sana henüz bir projeye erişim verilmemiş. Yöneticinle iletişime geç."}
         </p>
-        <ProjectFormDialog
-          trigger={
-            <Button size="sm" className="mt-2 gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> İlk projeni oluştur
-            </Button>
-          }
-        />
+        {isAdmin && (
+          <ProjectFormDialog
+            trigger={
+              <Button size="sm" className="mt-2 gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> İlk projeni oluştur
+              </Button>
+            }
+          />
+        )}
       </CardContent>
     </Card>
   );

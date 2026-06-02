@@ -31,7 +31,7 @@ import {
 } from "@/features/templates/hooks";
 import { TemplateEditorDialog } from "@/features/templates/components/template-editor";
 
-export function TemplatesList() {
+export function TemplatesList({ isAdmin }: { isAdmin: boolean }) {
   const query = useTemplates();
   const templates = query.data ?? [];
 
@@ -50,7 +50,7 @@ export function TemplatesList() {
   }
 
   if (templates.length === 0) {
-    return <EmptyState />;
+    return <EmptyState isAdmin={isAdmin} />;
   }
 
   return (
@@ -61,25 +61,33 @@ export function TemplatesList() {
           <span className="font-medium text-primary">{templates.length}</span>{" "}
           şablon
         </span>
-        <TemplateEditorDialog
-          trigger={
-            <Button size="sm" className="gap-2">
-              <Plus /> Yeni şablon
-            </Button>
-          }
-        />
+        {isAdmin && (
+          <TemplateEditorDialog
+            trigger={
+              <Button size="sm" className="gap-2">
+                <Plus /> Yeni şablon
+              </Button>
+            }
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
         {templates.map((template) => (
-          <TemplateCard key={template.id} template={template} />
+          <TemplateCard key={template.id} template={template} isAdmin={isAdmin} />
         ))}
       </div>
     </div>
   );
 }
 
-function TemplateCard({ template }: { template: TemplateDTO }) {
+function TemplateCard({
+  template,
+  isAdmin,
+}: {
+  template: TemplateDTO;
+  isAdmin: boolean;
+}) {
   const qc = useQueryClient();
   const remove = useDeleteTemplate();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -151,27 +159,31 @@ function TemplateCard({ template }: { template: TemplateDTO }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <TemplateEditorDialog
-            template={template}
-            trigger={
+          {isAdmin && (
+            <>
+              <TemplateEditorDialog
+                template={template}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Şablonu düzenle"
+                  >
+                    <Pencil />
+                  </Button>
+                }
+              />
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Şablonu düzenle"
+                onClick={() => setDeleteOpen(true)}
+                aria-label="Şablonu sil"
+                className="text-muted-foreground hover:text-destructive"
               >
-                <Pencil />
+                <Trash2 />
               </Button>
-            }
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setDeleteOpen(true)}
-            aria-label="Şablonu sil"
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 />
-          </Button>
+            </>
+          )}
         </div>
       </CardContent>
 
@@ -241,7 +253,7 @@ function ListSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -250,16 +262,19 @@ function EmptyState() {
         </div>
         <div className="font-serif text-xl italic">Henüz şablon yok</div>
         <p className="max-w-sm text-sm text-muted-foreground">
-          İlk şablonunu oluştur; AI her release&apos;i bu yapıda üretsin.
-          Bölümleri ve başlıkları dilediğin gibi düzenleyebilirsin.
+          {isAdmin
+            ? "İlk şablonunu oluştur; AI her release'i bu yapıda üretsin. Bölümleri ve başlıkları dilediğin gibi düzenleyebilirsin."
+            : "Henüz bir şablon tanımlanmamış. Yöneticin bir şablon oluşturunca burada görünür."}
         </p>
-        <TemplateEditorDialog
-          trigger={
-            <Button size="sm" className={cn("mt-2 gap-2")}>
-              <Plus /> İlk şablonunu oluştur
-            </Button>
-          }
-        />
+        {isAdmin && (
+          <TemplateEditorDialog
+            trigger={
+              <Button size="sm" className={cn("mt-2 gap-2")}>
+                <Plus /> İlk şablonunu oluştur
+              </Button>
+            }
+          />
+        )}
       </CardContent>
     </Card>
   );

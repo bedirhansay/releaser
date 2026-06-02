@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import {
   DropdownMenu,
@@ -18,16 +20,15 @@ export interface UserMenuProps {
     email?: string | null;
     image?: string | null;
   };
-  /** Server action — Next will marshal this across the client boundary. */
-  signOutAction: () => Promise<void>;
 }
 
 /**
- * Avatar + dropdown for the dashboard header. Lives in a client component
- * so Base UI's `render` prop closure stays on the client side; the
- * sign-out server action is passed in as a prop from the layout.
+ * Avatar + dropdown for the dashboard header. Sign-out runs on the client via
+ * next-auth's `signOut` — the most reliable one-click logout from a menu item,
+ * sidestepping the Base UI menu-close vs. form-submit race entirely.
  */
-export function UserMenu({ user, signOutAction }: UserMenuProps) {
+export function UserMenu({ user }: UserMenuProps) {
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const initials =
     user.name
       ?.split(" ")
@@ -54,16 +55,20 @@ export function UserMenu({ user, signOutAction }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <form action={signOutAction}>
-            <DropdownMenuItem
-              render={(props) => (
-                <button type="submit" {...props}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Çıkış yap
-                </button>
-              )}
-            />
-          </form>
+          {/* Base UI's MenuItem exposes onClick (not onSelect) and closes the
+              menu on click — so a nested <form>/<button> submit races the
+              unmount. Invoke the server action directly via onClick inside a
+              transition; it redirects on completion. */}
+          <DropdownMenuItem
+            disabled={isSigningOut}
+            onClick={() => {
+              setIsSigningOut(true);
+              void signOut({ callbackUrl: "/" });
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Çıkış yap
+          </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

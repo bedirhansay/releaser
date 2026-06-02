@@ -1,5 +1,6 @@
 import { AiSettingsForm } from "@/features/settings/components/ai-settings-form";
 import { GitHubAppCard } from "@/features/github-app/components/github-app-card";
+import { BitbucketCard } from "@/features/github-app/components/bitbucket-card";
 
 export default function SettingsPage() {
   return (
@@ -18,6 +19,7 @@ export default function SettingsPage() {
       </div>
 
       <GitHubAppCard />
+      <BitbucketCard />
       <AiSettingsForm />
     </div>
   );

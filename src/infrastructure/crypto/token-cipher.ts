@@ -30,9 +30,9 @@ let cachedKey: Buffer | null = null;
 function getKey(): Buffer {
   if (cachedKey) return cachedKey;
   const raw = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!raw || raw.length < 8) {
+  if (!raw || raw.length < 32) {
     throw new Error(
-      "TOKEN_ENCRYPTION_KEY is missing or too short. Set a strong value (openssl rand -base64 32).",
+      "TOKEN_ENCRYPTION_KEY is missing or too short (need >= 32 chars). Set a strong value (openssl rand -base64 32).",
     );
   }
   cachedKey = createHash("sha256").update(raw).digest();

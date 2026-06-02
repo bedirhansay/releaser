@@ -4,10 +4,36 @@ import {
   ReleaseEngine,
   type ReleaseEnginePRsResult,
 } from "@/core/release/engine";
-import { resolveAiProviderForUser } from "@/features/settings/ai-settings.service";
-import { resolveGitProviderForUser } from "@/core/git/resolve-provider";
+import { resolveAiProviderForOrg } from "@/features/settings/ai-settings.service";
+import { resolveGitProviderForOrg } from "@/core/git/resolve-provider";
+import { isAdmin, type SessionContext } from "@/shared/api/require-session";
 import type { GitProviderKind, PRFilterMode } from "@/core/git/types";
 import type { GeneratedRelease } from "@/types/release";
+
+/**
+ * Release visibility for a member: releases they authored, or releases for a
+ * project they can access (directly or via a group). Admins see all.
+ */
+function releaseAccessWhere(ctx: SessionContext): Prisma.ReleaseHistoryWhereInput {
+  if (isAdmin(ctx.role)) return {};
+  return {
+    OR: [
+      { createdById: ctx.userId },
+      {
+        project: {
+          access: {
+            some: {
+              OR: [
+                { userId: ctx.userId },
+                { group: { members: { some: { userId: ctx.userId } } } },
+              ],
+            },
+          },
+        },
+      },
+    ],
+  };
+}
 
 const PROVIDER_TO_DB = {
   github: "GITHUB",
@@ -38,13 +64,13 @@ export interface SaveReleaseInput {
   release: GeneratedRelease;
 }
 
-export async function generateReleaseForUser(
-  userId: string,
+export async function generateReleaseForOrg(
+  orgId: string,
   input: GenerateReleaseInput,
 ): Promise<GeneratedRelease> {
   const [git, ai] = await Promise.all([
-    resolveGitProviderForUser(userId, input.provider),
-    resolveAiProviderForUser(userId),
+    resolveGitProviderForOrg(orgId, input.provider),
+    resolveAiProviderForOrg(orgId),
   ]);
   const engine = new ReleaseEngine({ git, ai });
   return engine.generate(input);
@@ -57,13 +83,13 @@ export interface GenerateFromPRsServiceInput {
   filter: PRFilterMode;
 }
 
-export async function generateReleaseFromPRsForUser(
-  userId: string,
+export async function generateReleaseFromPRsForOrg(
+  orgId: string,
   input: GenerateFromPRsServiceInput,
 ): Promise<ReleaseEnginePRsResult> {
   const [git, ai] = await Promise.all([
-    resolveGitProviderForUser(userId, input.provider),
-    resolveAiProviderForUser(userId),
+    resolveGitProviderForOrg(orgId, input.provider),
+    resolveAiProviderForOrg(orgId),
   ]);
   const engine = new ReleaseEngine({ git, ai });
   return engine.generateFromPRs({
@@ -73,10 +99,11 @@ export async function generateReleaseFromPRsForUser(
   });
 }
 
-export async function saveRelease(userId: string, input: SaveReleaseInput) {
+export async function saveRelease(ctx: SessionContext, input: SaveReleaseInput) {
   return prisma.releaseHistory.create({
     data: {
-      userId,
+      orgId: ctx.orgId,
+      createdById: ctx.userId,
       projectId: input.projectId ?? null,
       templateId: input.templateId ?? null,
       provider: PROVIDER_TO_DB[input.provider],
@@ -133,8 +160,8 @@ export interface ListReleasesResult {
  * a compound cursor avoids the dropped-row problem you get with `OFFSET`
  * when new rows arrive during paging.
  */
-export async function listReleasesForUser(
-  userId: string,
+export async function listReleasesForOrg(
+  ctx: SessionContext,
   input: ListReleasesInput = {},
 ): Promise<ListReleasesResult> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
@@ -143,7 +170,8 @@ export async function listReleasesForUser(
 
   const items = await prisma.releaseHistory.findMany({
     where: {
-      userId,
+      orgId: ctx.orgId,
+      ...releaseAccessWhere(ctx),
       ...(search
         ? {
             OR: [
@@ -197,9 +225,9 @@ export async function listReleasesForUser(
   return { items: flat, nextCursor };
 }
 
-export async function getReleaseForUser(userId: string, id: string) {
+export async function getReleaseForOrg(ctx: SessionContext, id: string) {
   return prisma.releaseHistory.findFirst({
-    where: { id, userId },
+    where: { id, orgId: ctx.orgId, ...releaseAccessWhere(ctx) },
   });
 }
 
@@ -212,13 +240,13 @@ export interface UpdateReleaseInput {
 // Updates only the user-editable surface (title + markdown + tags). The
 // structured AI payload is kept frozen so we always have an audit trail of
 // what the model originally produced.
-export async function updateReleaseForUser(
-  userId: string,
+export async function updateReleaseForOrg(
+  ctx: SessionContext,
   id: string,
   patch: UpdateReleaseInput,
 ) {
   const result = await prisma.releaseHistory.updateMany({
-    where: { id, userId },
+    where: { id, orgId: ctx.orgId, ...releaseAccessWhere(ctx) },
     data: {
       ...(patch.title !== undefined ? { title: patch.title } : {}),
       ...(patch.markdown !== undefined ? { markdown: patch.markdown } : {}),
@@ -230,9 +258,9 @@ export async function updateReleaseForUser(
   return result.count > 0;
 }
 
-export async function deleteReleaseForUser(userId: string, id: string) {
+export async function deleteReleaseForOrg(ctx: SessionContext, id: string) {
   const result = await prisma.releaseHistory.deleteMany({
-    where: { id, userId },
+    where: { id, orgId: ctx.orgId, ...releaseAccessWhere(ctx) },
   });
   return result.count > 0;
 }

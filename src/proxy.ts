@@ -12,11 +12,23 @@ const PROTECTED_PREFIXES = [
   "/api/projects",
   "/api/templates",
   "/api/settings",
+  "/api/org",
+  "/api/github",
+  "/api/providers",
 ];
+
+// Public exceptions that live under a protected prefix. The GitHub App webhook
+// is authenticated by its HMAC signature, not a session, so it must NOT be
+// redirected to /login.
+const PUBLIC_EXCEPTIONS = ["/api/github/app/webhook"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const isPublicException = PUBLIC_EXCEPTIONS.some((p) =>
+    pathname.startsWith(p),
+  );
+  const isProtected =
+    !isPublicException && PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
   if (!req.auth) {
     const url = req.nextUrl.clone();

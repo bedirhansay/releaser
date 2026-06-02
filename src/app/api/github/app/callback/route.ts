@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireRole, requireSession } from "@/shared/api/require-session";
 import { handleApiError } from "@/shared/api/response";
 import { getInstallationMeta } from "@/infrastructure/github/app-auth";
-import { saveInstallationForUser } from "@/features/github-app/github-app.service";
+import { saveInstallationForOrg } from "@/features/github-app/github-app.service";
 
 // GitHub redirects here after the user installs / reconfigures the App.
 // Query params: installation_id, setup_action, state.
@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
     );
 
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
+    // Installing/attaching a GitHub App to the org is an admin action, matching
+    // the gate on the install-initiation route.
+    requireRole(session, "OWNER", "ADMIN");
     const params = req.nextUrl.searchParams;
     const installationIdRaw = params.get("installation_id");
     const state = params.get("state");
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest) {
       /* metadata is non-critical — store the installation regardless */
     }
 
-    await saveInstallationForUser(userId, installationId, meta);
+    await saveInstallationForOrg(session.orgId, installationId, meta);
 
     const res = NextResponse.redirect(settingsUrl("connected"));
     res.cookies.delete("gh_app_state");

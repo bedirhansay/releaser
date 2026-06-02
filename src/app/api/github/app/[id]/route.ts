@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireRole, requireSession } from "@/shared/api/require-session";
 import { apiError, apiOk, handleApiError } from "@/shared/api/response";
-import { deleteInstallationForUser } from "@/features/github-app/github-app.service";
+import { deleteInstallationForOrg } from "@/features/github-app/github-app.service";
 
 const paramsSchema = z.object({ id: z.string().min(1) });
 
@@ -13,9 +13,10 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
+    requireRole(session, "OWNER", "ADMIN");
     const { id } = paramsSchema.parse(await ctx.params);
-    const ok = await deleteInstallationForUser(userId, id);
+    const ok = await deleteInstallationForOrg(session.orgId, id);
     if (!ok) return apiError("Installation not found", 404);
     return apiOk({ deleted: true });
   } catch (err) {

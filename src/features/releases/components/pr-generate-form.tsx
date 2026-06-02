@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -23,6 +24,7 @@ import {
   useTags,
 } from "@/features/repositories/hooks";
 import { RepoCombobox } from "@/features/repositories/components/repo-combobox";
+import { ProjectRepoSelect } from "@/features/repositories/components/project-repo-select";
 import type {
   GitProviderKind,
   PRFilterMode,
@@ -57,7 +59,8 @@ export function PRGenerateForm({
   isPending?: boolean;
 }) {
   const providers = useLinkedProviders();
-  const [provider, setProvider] = useState<GitProviderKind | null>(null);
+  // Default to Bitbucket — the primary provider for this wizard.
+  const [provider, setProvider] = useState<GitProviderKind | null>("bitbucket");
   const [repoFullName, setRepoFullName] = useState<string | null>(null);
   const [mode, setMode] = useState<PRFilterMode["type"]>("last-n");
   // Applies to last-n / date-range; between-tags is implicitly merged-only.
@@ -83,10 +86,20 @@ export function PRGenerateForm({
   const [prevRepo, setPrevRepo] = useState(repoFullName);
 
   const repos = useRepositories(provider ?? "github", "");
-  const selected = useMemo(
-    () => repos.data?.find((r) => r.fullName === repoFullName) ?? null,
-    [repos.data, repoFullName],
-  );
+  // Prefer a repo from the fetched list, but fall back to splitting the raw
+  // "owner/repo" value so manually-entered repos (listing unavailable) still
+  // produce a usable { owner, name } selection downstream.
+  const selected = useMemo(() => {
+    if (!repoFullName) return null;
+    const fromList = repos.data?.find((r) => r.fullName === repoFullName);
+    if (fromList) return fromList;
+    const slash = repoFullName.indexOf("/");
+    if (slash <= 0) return null;
+    const owner = repoFullName.slice(0, slash);
+    const name = repoFullName.slice(slash + 1);
+    if (!owner || !name) return null;
+    return { owner, name } as { owner: string; name: string };
+  }, [repos.data, repoFullName]);
   const branches = useBranches(
     provider ?? "github",
     selected?.owner ?? null,
@@ -99,8 +112,13 @@ export function PRGenerateForm({
   );
   const preview = usePullRequestsPreview();
 
-  // Auto-pick the first linked provider during render (avoids setState-in-effect).
-  if (!provider && providers.data && providers.data.length > 0) {
+  // If the default provider isn't linked, fall back to the first linked one so
+  // the form stays usable (avoids setState-in-effect).
+  if (
+    providers.data &&
+    providers.data.length > 0 &&
+    (!provider || !providers.data.includes(provider))
+  ) {
     setProvider(providers.data[0]);
   }
 
@@ -185,13 +203,14 @@ export function PRGenerateForm({
       <div className="rounded-md border border-border/60 bg-card/40 p-6 text-sm">
         <p className="font-medium">Bağlı git sağlayıcı yok.</p>
         <p className="mt-1 text-muted-foreground">
-          PR&apos;lardan release üretmek için bir sağlayıcı bağla.
+          PR&apos;lardan release üretmek için Ayarlar&apos;dan GitHub veya
+          Bitbucket bağla.
         </p>
         <Link
-          href="/login"
+          href="/dashboard/settings"
           className="mt-3 inline-flex text-primary underline"
         >
-          Giriş yap →
+          Ayarlar&apos;a git →
         </Link>
       </div>
     );
@@ -234,12 +253,33 @@ export function PRGenerateForm({
 
       <div className="grid gap-2">
         <Label>Repo</Label>
+        {/* Primary, reliable source: repos the user already defined in their
+            projects (our own DB). Selecting one syncs provider + owner/repo and
+            feeds the exact same downstream contract as the manual combobox. */}
+        <ProjectRepoSelect
+          value={selected ? { provider: provider ?? "github", ...selected } : null}
+          onSelect={(entry) => {
+            const fullName = `${entry.owner}/${entry.name}`;
+            // Advance the prev-trackers so the during-render reset doesn't
+            // clobber the repo we're setting alongside the provider change.
+            setProvider(entry.provider);
+            setPrevProvider(entry.provider);
+            setRepoFullName(fullName);
+            setPrevRepo(fullName);
+            setBaseBranch(null);
+            setBaseTag(null);
+            setHeadTag(null);
+          }}
+        />
+        {/* Secondary / fallback: type owner/repo manually (or another repo). */}
         <RepoCombobox
+          key={provider ?? "none"}
           value={repoFullName}
-          onChange={setRepoFullName}
+          onChange={(fullName) => setRepoFullName(fullName || null)}
           repos={repos.data ?? []}
           isLoading={repos.isLoading || providers.isLoading}
           error={repos.error ? (repos.error as Error).message : null}
+          manualFallback
         />
       </div>
 
@@ -335,19 +375,11 @@ export function PRGenerateForm({
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
                 <Label>Başlangıç</Label>
-                <Input
-                  type="date"
-                  value={since}
-                  onChange={(e) => setSince(e.target.value)}
-                />
+                <DatePicker value={since} onChange={setSince} />
               </div>
               <div className="grid gap-2">
                 <Label>Bitiş</Label>
-                <Input
-                  type="date"
-                  value={until}
-                  onChange={(e) => setUntil(e.target.value)}
-                />
+                <DatePicker value={until} onChange={setUntil} />
               </div>
               <div className="grid gap-2">
                 <Label>Hedef branch (opsiyonel)</Label>

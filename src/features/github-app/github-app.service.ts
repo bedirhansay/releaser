@@ -12,12 +12,12 @@ export interface InstallationRecord {
 }
 
 /**
- * Persist (or refresh) a GitHub App installation for a user. Called from the
+ * Persist (or refresh) a GitHub App installation for an org. Called from the
  * post-install callback. `installationId` is globally unique, so we upsert on
  * it — re-installing or re-configuring updates the same row.
  */
-export async function saveInstallationForUser(
-  userId: string,
+export async function saveInstallationForOrg(
+  orgId: string,
   installationId: number,
   meta: {
     accountLogin?: string | null;
@@ -28,14 +28,14 @@ export async function saveInstallationForUser(
   await prisma.gitHubInstallation.upsert({
     where: { installationId },
     create: {
-      userId,
+      orgId,
       installationId,
       accountLogin: meta.accountLogin ?? null,
       accountType: meta.accountType ?? null,
       repositorySelection: meta.repositorySelection ?? null,
     },
     update: {
-      userId,
+      orgId,
       suspended: false,
       ...(meta.accountLogin !== undefined
         ? { accountLogin: meta.accountLogin }
@@ -50,11 +50,11 @@ export async function saveInstallationForUser(
   });
 }
 
-export async function listInstallationsForUser(
-  userId: string,
+export async function listInstallationsForOrg(
+  orgId: string,
 ): Promise<InstallationRecord[]> {
   const rows = await prisma.gitHubInstallation.findMany({
-    where: { userId },
+    where: { orgId },
     orderBy: { createdAt: "desc" },
   });
   return rows.map((r) => ({
@@ -69,11 +69,11 @@ export async function listInstallationsForUser(
 }
 
 /** The installation we use for repo access — newest active one wins. */
-export async function getPrimaryInstallationForUser(
-  userId: string,
+export async function getPrimaryInstallationForOrg(
+  orgId: string,
 ): Promise<InstallationRecord | null> {
   const row = await prisma.gitHubInstallation.findFirst({
-    where: { userId, suspended: false },
+    where: { orgId, suspended: false },
     orderBy: { createdAt: "desc" },
   });
   if (!row) return null;
@@ -88,22 +88,22 @@ export async function getPrimaryInstallationForUser(
   };
 }
 
-/** Mint a fresh installation token for the user's active installation. */
-export async function getInstallationTokenForUser(
-  userId: string,
+/** Mint a fresh installation token for the org's active installation. */
+export async function getInstallationTokenForOrg(
+  orgId: string,
 ): Promise<string | null> {
-  const installation = await getPrimaryInstallationForUser(userId);
+  const installation = await getPrimaryInstallationForOrg(orgId);
   if (!installation) return null;
   return getInstallationToken(installation.installationId);
 }
 
 /** Forget an installation locally (record only; user revokes on GitHub). */
-export async function deleteInstallationForUser(
-  userId: string,
+export async function deleteInstallationForOrg(
+  orgId: string,
   id: string,
 ): Promise<boolean> {
   const result = await prisma.gitHubInstallation.deleteMany({
-    where: { id, userId },
+    where: { id, orgId },
   });
   return result.count > 0;
 }

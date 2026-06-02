@@ -1,6 +1,10 @@
-import { resolveAiProviderForUser } from "@/features/settings/ai-settings.service";
-import { resolveGitProviderForUser } from "@/core/git/resolve-provider";
-import { buildTemplateMarkdown } from "@/core/release/markdown";
+import { resolveAiProviderForOrg } from "@/features/settings/ai-settings.service";
+import { resolveGitProviderForOrg } from "@/core/git/resolve-provider";
+import {
+  buildTemplateMarkdown,
+  type RelevantPR,
+} from "@/core/release/markdown";
+import type { SessionContext } from "@/shared/api/require-session";
 import type {
   GitProvider,
   GitProviderKind,
@@ -8,11 +12,11 @@ import type {
 } from "@/core/git/types";
 import type { AITemplateRepoContext } from "@/core/ai/types";
 import { RELEASE_CATEGORIES, type GeneratedRelease } from "@/types/release";
-import { getProjectForUser } from "./projects.service";
+import { getProjectForOrg } from "./projects.service";
 import { saveRelease } from "@/features/releases/releases.service";
 import {
-  ensureDefaultTemplateForUser,
-  getTemplateForUser,
+  ensureDefaultTemplateForOrg,
+  getTemplateForOrg,
 } from "@/features/templates/templates.service";
 
 export interface GenerateProjectReleaseInput {
@@ -21,6 +25,31 @@ export interface GenerateProjectReleaseInput {
   templateId?: string;
   /** One PR window applied to every repo in the project. */
   filter: PRFilterMode;
+  /**
+   * Per-release overrides for the deterministic header. Sign-off + risk are a
+   * release-level responsibility (each release can differ), prefilled from the
+   * project defaults but set here at generation time.
+   */
+  meta?: {
+    version?: string;
+    date?: string;
+    risk?: string;
+    signOff?: string;
+  };
+}
+
+/** Version hint from the window when generating between two tags. */
+function versionFromFilter(filter: PRFilterMode): string | undefined {
+  return filter.type === "between-tags" ? filter.headTag : undefined;
+}
+
+/**
+ * Renders an ISO "YYYY-MM-DD" date as Turkish "DD.MM.YYYY" for the doc meta.
+ * Passes through anything that isn't a clean ISO date untouched.
+ */
+function formatTrDate(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : value;
 }
 
 export interface ProjectReleaseRepoResult {
@@ -51,25 +80,25 @@ export interface GenerateProjectReleaseResult {
  * fill each template section. Output structure is fixed by the template, so the
  * same project always produces the same shape.
  */
-export async function generateProjectReleaseForUser(
-  userId: string,
+export async function generateProjectReleaseForOrg(
+  ctx: SessionContext,
   input: GenerateProjectReleaseInput,
 ): Promise<GenerateProjectReleaseResult> {
-  const project = await getProjectForUser(userId, input.projectId);
+  const project = await getProjectForOrg(ctx, input.projectId);
   if (!project) throw new Error("Project not found.");
   if (project.repos.length === 0) {
     throw new Error("This project has no repositories yet.");
   }
 
   const template = input.templateId
-    ? await getTemplateForUser(userId, input.templateId)
-    : await ensureDefaultTemplateForUser(userId);
+    ? await getTemplateForOrg(ctx.orgId, input.templateId)
+    : await ensureDefaultTemplateForOrg(ctx.orgId, ctx.userId);
   if (!template) throw new Error("Template not found.");
   if (template.sections.length === 0) {
     throw new Error("This template has no sections.");
   }
 
-  const ai = await resolveAiProviderForUser(userId);
+  const ai = await resolveAiProviderForOrg(ctx.orgId);
 
   // One git provider per distinct provider kind (a project may mix GitHub +
   // Bitbucket repos), resolved once and reused across that provider's repos.
@@ -79,25 +108,33 @@ export async function generateProjectReleaseForUser(
   const gitByKind = new Map<GitProviderKind, GitProvider>();
   await Promise.all(
     providerKinds.map(async (kind) => {
-      gitByKind.set(kind, await resolveGitProviderForUser(userId, kind));
+      gitByKind.set(kind, await resolveGitProviderForOrg(ctx.orgId, kind));
     }),
   );
 
   // Gather PRs for every repo in parallel.
   const repoContexts = await Promise.all(
     project.repos.map(async (repo): Promise<
-      AITemplateRepoContext & { prCount: number }
+      AITemplateRepoContext & { prCount: number; prLinks: RelevantPR[] }
     > => {
       const git = gitByKind.get(repo.provider)!;
+      const repoFullName = `${repo.owner}/${repo.name}`;
       const prs = await git.listPullRequests({
         owner: repo.owner,
         repo: repo.name,
         filter: input.filter,
       });
       return {
-        repoFullName: `${repo.owner}/${repo.name}`,
+        repoFullName,
         role: repo.role,
         prCount: prs.length,
+        // Real PR links for the deterministic "Relevant PRs" block.
+        prLinks: prs.map((p) => ({
+          repoFullName,
+          number: p.number,
+          title: p.title,
+          url: p.url,
+        })),
         pullRequests: prs.map((p) => ({
           number: p.number,
           title: p.title,
@@ -130,18 +167,38 @@ export async function generateProjectReleaseForUser(
     sections: template.sections,
   });
 
+  // Prefer a clean "{product} {version}" title when a version is supplied,
+  // so the title never embeds the PR window. Falls back to the AI title.
+  const releaseTitle = input.meta?.version
+    ? `${project.name} ${input.meta.version}`
+    : aiOut.title;
+
+  const relevantPRs = repoContexts.flatMap((r) => r.prLinks);
   const markdown = buildTemplateMarkdown({
-    title: aiOut.title,
+    title: releaseTitle,
     projectName: project.name,
     windowLabel,
     sections: template.sections.map((s) => ({
       heading: s.heading,
       content: aiOut.sections[s.id] ?? "",
     })),
+    meta: {
+      product: project.name,
+      version: input.meta?.version ?? versionFromFilter(input.filter),
+      date: input.meta?.date
+        ? formatTrDate(input.meta.date)
+        : new Date().toLocaleDateString("tr-TR"),
+      risk: input.meta?.risk ?? project.defaultRisk,
+    },
+    // Release-level responsibility: per-release sign-off overrides the project
+    // default template; monitoring stays a project constant.
+    signOff: input.meta?.signOff ?? project.signOff,
+    monitoring: project.monitoringLinks,
+    relevantPRs,
   });
 
   return {
-    title: aiOut.title,
+    title: releaseTitle,
     markdown,
     sections: aiOut.sections,
     windowLabel,
@@ -178,14 +235,14 @@ export interface SaveProjectReleaseInput {
  * we anchor it to the project's primary repo and tag it with `projectId`; the
  * full multi-repo context is reconstructable from the linked Project.
  */
-export async function saveProjectReleaseForUser(
-  userId: string,
+export async function saveProjectReleaseForOrg(
+  ctx: SessionContext,
   input: SaveProjectReleaseInput,
 ) {
-  const project = await getProjectForUser(userId, input.projectId);
+  const project = await getProjectForOrg(ctx, input.projectId);
   if (!project) throw new Error("Project not found.");
 
-  return saveRelease(userId, {
+  return saveRelease(ctx, {
     provider: input.primaryRepo.provider,
     owner: input.primaryRepo.owner,
     repo: input.primaryRepo.name,

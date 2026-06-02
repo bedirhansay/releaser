@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { GithubIcon } from "@/components/icons/github";
 import { BitbucketIcon } from "@/components/icons/bitbucket";
 import { Logo } from "@/components/brand/logo";
+import { CredentialsForm } from "./credentials-form";
 
 interface PageProps {
   searchParams: Promise<{ from?: string }>;
@@ -23,6 +24,12 @@ export default async function LoginPage({ searchParams }: PageProps) {
   if (session) redirect("/dashboard");
   const { from } = await searchParams;
   const redirectTo = from && from.startsWith("/") ? from : "/dashboard";
+
+  // Prefill the seeded superadmin in local dev only — never in production, so
+  // the credentials never ship in a deployed bundle.
+  const isDev = process.env.NODE_ENV !== "production";
+  const defaultEmail = isDev ? (process.env.SUPERADMIN_EMAIL ?? "") : "";
+  const defaultPassword = isDev ? (process.env.SUPERADMIN_PASSWORD ?? "") : "";
 
   return (
     <div className="relative isolate flex flex-1 items-center justify-center px-6 py-16">
@@ -43,30 +50,40 @@ export default async function LoginPage({ searchParams }: PageProps) {
               Tekrar hoş geldin
             </CardTitle>
             <CardDescription>
-              Kullandığın sağlayıcıyla giriş yap. Sadece commit&apos;leri
-              çekmek için gereken read scope&apos;larını isteriz.
+              Yöneticinin tanımladığı e-posta ve şifreyle giriş yap.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <CredentialsForm
+              redirectTo={redirectTo}
+              defaultEmail={defaultEmail}
+              defaultPassword={defaultPassword}
+            />
+
+            <div className="flex items-center gap-3 pt-1">
+              <Separator className="flex-1" />
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                git bağlamak için
+              </span>
+              <Separator className="flex-1" />
+            </div>
+
             <form
               action={async () => {
                 "use server";
                 await signIn("github", { redirectTo });
               }}
             >
-              <Button type="submit" size="lg" className="w-full gap-2">
+              <Button
+                type="submit"
+                size="lg"
+                variant="outline"
+                className="w-full gap-2"
+              >
                 <GithubIcon className="h-4 w-4" />
                 GitHub ile devam et
               </Button>
             </form>
-
-            <div className="flex items-center gap-3">
-              <Separator className="flex-1" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                ya da
-              </span>
-              <Separator className="flex-1" />
-            </div>
 
             <form
               action={async () => {
@@ -87,10 +104,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
 
             <p className="pt-3 text-center text-xs text-muted-foreground">
               İlk defa mı geldin?{" "}
-              <Link
-                href="/guide"
-                className="text-foreground underline-grow"
-              >
+              <Link href="/guide" className="text-foreground underline-grow">
                 Önce rehberi oku
               </Link>
               .

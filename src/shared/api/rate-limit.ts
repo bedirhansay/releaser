@@ -87,6 +87,12 @@ export const POLICIES = {
     limit: 50,
     window: 24 * 60 * 60 * 1000,
   } satisfies RateLimitConfig,
+  /**
+   * 10 login attempts per 15 min per email — slows credential brute-force.
+   * Keyed on the target email, so it throttles attacks against one account
+   * without a shared global that legit users could trip for each other.
+   */
+  LOGIN: { limit: 10, window: 15 * 60 * 1000 } satisfies RateLimitConfig,
 } as const;
 
 /**

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireSession } from "@/shared/api/require-session";
 import { apiOk, handleApiError } from "@/shared/api/response";
 import { providerSchema } from "@/shared/api/provider-schema";
 import { prFilterSchema } from "@/shared/api/pr-filter-schema";
@@ -23,10 +23,10 @@ export async function POST(
   ctx: { params: Promise<{ owner: string; repo: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
     const { owner, repo } = paramsSchema.parse(await ctx.params);
     const { provider, filter } = bodySchema.parse(await req.json());
-    const pulls = await listPullRequests(userId, provider, {
+    const pulls = await listPullRequests(session.orgId, provider, {
       owner,
       repo,
       filter,

@@ -16,9 +16,9 @@ export interface AiSettingStatus {
 }
 
 export async function getAiSettingStatus(
-  userId: string,
+  orgId: string,
 ): Promise<AiSettingStatus> {
-  const row = await prisma.aiSetting.findUnique({ where: { userId } });
+  const row = await prisma.aiSetting.findUnique({ where: { orgId } });
   return {
     hasKey: Boolean(row?.apiKeyCipher),
     baseUrl: row?.baseUrl ?? null,
@@ -34,8 +34,8 @@ export interface UpsertAiSettingInput {
   model?: string | null;
 }
 
-export async function upsertAiSettingForUser(
-  userId: string,
+export async function upsertAiSettingForOrg(
+  orgId: string,
   input: UpsertAiSettingInput,
 ): Promise<AiSettingStatus> {
   // Encrypt only when a new key is provided. An explicit empty string clears
@@ -50,9 +50,9 @@ export async function upsertAiSettingForUser(
         };
 
   await prisma.aiSetting.upsert({
-    where: { userId },
+    where: { orgId },
     create: {
-      userId,
+      orgId,
       apiKeyCipher: input.apiKey ? encryptToken(input.apiKey) : null,
       baseUrl: input.baseUrl ?? null,
       model: input.model ?? null,
@@ -64,18 +64,18 @@ export async function upsertAiSettingForUser(
     },
   });
 
-  return getAiSettingStatus(userId);
+  return getAiSettingStatus(orgId);
 }
 
 /**
- * Builds the AI provider for a user: their own encrypted key/endpoint when set,
+ * Builds the AI provider for an org: its own encrypted key/endpoint when set,
  * otherwise the shared AI_* env fallback. This is the single entry point every
  * generation path should use so BYO-LLM is honoured everywhere.
  */
-export async function resolveAiProviderForUser(
-  userId: string,
+export async function resolveAiProviderForOrg(
+  orgId: string,
 ): Promise<AIProvider> {
-  const row = await prisma.aiSetting.findUnique({ where: { userId } });
+  const row = await prisma.aiSetting.findUnique({ where: { orgId } });
   if (row?.apiKeyCipher) {
     return createAIProvider({
       apiKey: decryptToken(row.apiKeyCipher),

@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { requireSessionUserId } from "@/shared/api/require-session";
+import { requireRole, requireSession } from "@/shared/api/require-session";
 import { apiError, apiOk, handleApiError } from "@/shared/api/response";
 import {
-  deleteTemplateForUser,
-  getTemplateForUser,
-  updateTemplateForUser,
+  deleteTemplateForOrg,
+  getTemplateForOrg,
+  updateTemplateForOrg,
 } from "@/features/templates/templates.service";
 import { templateSectionsSchema } from "@/types/template-schemas";
 
@@ -34,9 +34,9 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
     const { id } = paramsSchema.parse(await ctx.params);
-    const template = await getTemplateForUser(userId, id);
+    const template = await getTemplateForOrg(session.orgId, id);
     if (!template) return apiError("Template not found", 404);
     return apiOk({ template });
   } catch (err) {
@@ -49,10 +49,11 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
+    requireRole(session, "OWNER", "ADMIN");
     const { id } = paramsSchema.parse(await ctx.params);
     const body = patchSchema.parse(await req.json());
-    const ok = await updateTemplateForUser(userId, id, body);
+    const ok = await updateTemplateForOrg(session.orgId, id, body);
     if (!ok) return apiError("Template not found", 404);
     return apiOk({ template: { id } });
   } catch (err) {
@@ -65,9 +66,10 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const userId = await requireSessionUserId();
+    const session = await requireSession();
+    requireRole(session, "OWNER", "ADMIN");
     const { id } = paramsSchema.parse(await ctx.params);
-    const ok = await deleteTemplateForUser(userId, id);
+    const ok = await deleteTemplateForOrg(session.orgId, id);
     if (!ok) return apiError("Template not found", 404);
     return apiOk({ deleted: true });
   } catch (err) {
