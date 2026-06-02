@@ -1,0 +1,47 @@
+# Run the whole stack with: docker compose up --build
+#
+# Zero-config defaults are baked in below so a colleague can just run it. Any
+# value can be overridden by creating a `.env` file next to this one (compose
+# reads it automatically) — handy for adding GitHub/Bitbucket OAuth or an AI key.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: releaser
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d releaser"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Host port is configurable (APP_PORT) in case 3000 is taken locally.
+      - "${APP_PORT:-3000}:3000"
+    # Tüm değişkenler buradan gelir — kök dizindeki mevcut `.env` dosyanı
+    # (AUTH_GITHUB_SECRET, AI_API_KEY, çok satırlı GITHUB_APP_PRIVATE_KEY dahil)
+    # olduğu gibi okur. Tek tek listelemeye gerek yok.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Bu ikisi `.env`'i EZER (environment > env_file):
+      #  - DATABASE_URL: container içinden "localhost" değil, "db" servisine gider
+      #  - AUTH_TRUST_HOST: next-auth v5'in container arkasında host'a güvenmesi için
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/releaser?schema=public"
+      AUTH_TRUST_HOST: "true"
+
+volumes:
+  db-data:

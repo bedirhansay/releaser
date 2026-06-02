@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — ignore every real env file, but keep the example in the repo
+.env
+.env.*
+!.env.example
+
+# local build / ship artifacts (docker image tarballs, demo .env, etc.)
+/dist/
 
 # vercel
 .vercel

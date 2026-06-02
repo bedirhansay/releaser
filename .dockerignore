@@ -1,0 +1,28 @@
+# deps & build artifacts — rebuilt inside the image
+node_modules
+.next
+out
+build
+coverage
+
+# local env & secrets — never bake into the image
+.env
+.env.*
+!.env.example
+*.pem
+
+# git / editor / OS cruft
+.git
+.github
+.gitignore
+.DS_Store
+*.log
+
+# docs & tests not needed at runtime
+*.md
+**/*.test.ts
+**/*.test.tsx
+
+# tooling caches
+*.tsbuildinfo
+.vercel
