@@ -204,6 +204,7 @@ enum GitProviderKind {
   GITHUB
   BITBUCKET
   GITLAB
+  LOCAL
 }
 
 model GitConnection {

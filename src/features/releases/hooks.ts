@@ -74,7 +74,7 @@ export function useSaveRelease() {
 
 export interface HistoryItem {
   id: string;
-  provider: "GITHUB" | "BITBUCKET" | "GITLAB";
+  provider: "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL";
   repoOwner: string;
   repoName: string;
   baseRef: string;

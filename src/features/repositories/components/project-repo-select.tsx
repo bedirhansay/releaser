@@ -15,6 +15,7 @@ const PROVIDER_LABEL: Record<GitProviderKind, string> = {
   github: "GitHub",
   bitbucket: "Bitbucket",
   gitlab: "GitLab",
+  local: "Local",
 };
 
 export interface ProjectRepoEntry {

@@ -36,6 +36,7 @@ const PROVIDER_LABEL: Record<GitProviderKind, string> = {
   github: "GitHub",
   bitbucket: "Bitbucket",
   gitlab: "GitLab",
+  local: "Local",
 };
 
 /** How many days to default the date-range filter to. */
@@ -112,14 +113,19 @@ export function PRGenerateForm({
   );
   const preview = usePullRequestsPreview();
 
+  // PRs don't exist in a local clone, so the local provider is never offered
+  // in this (PR-based) form — only GitHub/Bitbucket.
+  const prProviders: GitProviderKind[] = (providers.data ?? []).filter(
+    (p) => p !== "local",
+  );
+
   // If the default provider isn't linked, fall back to the first linked one so
   // the form stays usable (avoids setState-in-effect).
   if (
-    providers.data &&
-    providers.data.length > 0 &&
-    (!provider || !providers.data.includes(provider))
+    prProviders.length > 0 &&
+    (!provider || !prProviders.includes(provider))
   ) {
-    setProvider(providers.data[0]);
+    setProvider(prProviders[0]);
   }
 
   // Reset dependent selections during render when provider/repo changes, so
@@ -154,7 +160,7 @@ export function PRGenerateForm({
     });
   }, [provider, selected, onChange]);
 
-  const linked = providers.data ?? [];
+  const linked = prProviders;
   const noProviders = providers.isSuccess && linked.length === 0;
 
   const currentFilter: PRFilterMode | null = useMemo(() => {

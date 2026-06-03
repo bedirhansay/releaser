@@ -10,7 +10,7 @@ ENV PNPM_HOME=/pnpm \
 # Pre-activate the pinned pnpm so it's baked into the image — no download at
 # container startup (the seed step shells out to pnpm).
 RUN corepack enable && corepack prepare pnpm@10.20.0 --activate && \
-    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && \
+    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

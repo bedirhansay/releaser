@@ -39,7 +39,11 @@ const PROVIDER_TO_DB = {
   github: "GITHUB",
   bitbucket: "BITBUCKET",
   gitlab: "GITLAB",
-} as const satisfies Record<GitProviderKind, "GITHUB" | "BITBUCKET" | "GITLAB">;
+  local: "LOCAL",
+} as const satisfies Record<
+  GitProviderKind,
+  "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL"
+>;
 
 export interface GenerateReleaseInput {
   provider: GitProviderKind;
@@ -139,7 +143,7 @@ export interface ListReleasesInput {
 export interface ListReleasesResult {
   items: Array<{
     id: string;
-    provider: "GITHUB" | "BITBUCKET" | "GITLAB";
+    provider: "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL";
     repoOwner: string;
     repoName: string;
     baseRef: string;

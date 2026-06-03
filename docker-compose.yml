@@ -37,11 +37,17 @@ services:
       - path: .env
         required: false
     environment:
-      # Bu ikisi `.env`'i EZER (environment > env_file):
+      # Bu üçü `.env`'i EZER (environment > env_file):
       #  - DATABASE_URL: container içinden "localhost" değil, "db" servisine gider
       #  - AUTH_TRUST_HOST: next-auth v5'in container arkasında host'a güvenmesi için
+      #  - LOCAL_REPOS_DIR: container içindeki mount noktası (host yolu değil)
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/releaser?schema=public"
       AUTH_TRUST_HOST: "true"
+      LOCAL_REPOS_DIR: "/repos"
+    volumes:
+      # "Local" sağlayıcı için: git clone'larının olduğu host klasörünü salt-okunur bağla.
+      # LOCAL_REPOS_HOST'u .env'de kendi yoluna ayarla (örn. /Users/sen/projeler).
+      - "${LOCAL_REPOS_HOST:-./repos}:/repos:ro"
 
 volumes:
   db-data:

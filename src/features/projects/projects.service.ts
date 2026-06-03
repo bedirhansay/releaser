@@ -3,13 +3,14 @@ import { prisma } from "@/infrastructure/db/prisma";
 import { isAdmin, type SessionContext } from "@/shared/api/require-session";
 import type { GitProviderKind } from "@/core/git/types";
 
-type DbProvider = "GITHUB" | "BITBUCKET" | "GITLAB";
+type DbProvider = "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL";
 
 // lowercase GitProviderKind -> Prisma enum (write path).
 const PROVIDER_TO_DB = {
   github: "GITHUB",
   bitbucket: "BITBUCKET",
   gitlab: "GITLAB",
+  local: "LOCAL",
 } as const satisfies Record<GitProviderKind, DbProvider>;
 
 // Prisma enum -> lowercase GitProviderKind (read path).
@@ -17,6 +18,7 @@ const DB_TO_PROVIDER = {
   GITHUB: "github",
   BITBUCKET: "bitbucket",
   GITLAB: "gitlab",
+  LOCAL: "local",
 } as const satisfies Record<DbProvider, GitProviderKind>;
 
 export interface ProjectRepoInput {

@@ -40,6 +40,7 @@ import type { GitProviderKind } from "@/core/git/types";
 const PROVIDER_OPTIONS: { value: GitProviderKind; label: string }[] = [
   { value: "github", label: "GitHub" },
   { value: "bitbucket", label: "Bitbucket" },
+  { value: "local", label: "Local" },
 ];
 
 interface RepoRow {

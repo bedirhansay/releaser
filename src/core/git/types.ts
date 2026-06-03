@@ -3,7 +3,7 @@
 // payloads onto these shapes — application code must never depend on a
 // provider-specific type.
 
-export type GitProviderKind = "github" | "bitbucket" | "gitlab";
+export type GitProviderKind = "github" | "bitbucket" | "gitlab" | "local";
 
 export interface Repository {
   id: string;

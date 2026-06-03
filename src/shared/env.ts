@@ -45,6 +45,12 @@ const envSchema = z.object({
   // limiter coordinates across instances; otherwise it falls back to in-process.
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
+  // Optional "local" git provider. When set, release notes can be generated
+  // straight from git clones on disk under this directory — no OAuth/token.
+  // In Docker this is a mounted volume (e.g. /repos); run directly it can point
+  // anywhere readable (e.g. ~/projects).
+  LOCAL_REPOS_DIR: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

@@ -14,17 +14,23 @@ import type { GitProvider, GitProviderKind } from "./types";
 
 const PROVIDER_TO_DB: Record<
   GitProviderKind,
-  "GITHUB" | "BITBUCKET" | "GITLAB"
+  "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL"
 > = {
   github: "GITHUB",
   bitbucket: "BITBUCKET",
   gitlab: "GITLAB",
+  local: "LOCAL",
 };
 
 export async function resolveGitProviderForOrg(
   orgId: string,
   kind: GitProviderKind = "github",
 ): Promise<GitProvider> {
+  // Local provider reads on-disk clones — no GitConnection / token required.
+  if (kind === "local") {
+    return createGitProvider({ kind, accessToken: "" });
+  }
+
   // Prefer a GitHub App installation (Coolify-style, least-privilege per-repo
   // access via short-lived tokens) when the App is configured and the org has
   // installed it. Fall back to the OAuth connection otherwise.

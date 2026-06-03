@@ -1,5 +1,6 @@
 import { prisma } from "@/infrastructure/db/prisma";
 import { resolveGitProviderForOrg } from "@/core/git/resolve-provider";
+import { isLocalProviderConfigured } from "@/infrastructure/local/config";
 import type {
   GitProviderKind,
   ListPullRequestsParams,
@@ -62,6 +63,7 @@ const PROVIDER_FROM_DB = {
   GITHUB: "github",
   BITBUCKET: "bitbucket",
   GITLAB: "gitlab",
+  LOCAL: "local",
 } as const satisfies Record<string, GitProviderKind>;
 
 type DbProvider = keyof typeof PROVIDER_FROM_DB;
@@ -83,5 +85,8 @@ export async function listLinkedProviders(
     connections.map((c) => PROVIDER_FROM_DB[c.provider as DbProvider]),
   );
   if (ghInstall) providers.add("github");
+  // The local provider needs no connection row — surface it whenever the
+  // on-disk repos directory is configured (LOCAL_REPOS_DIR).
+  if (isLocalProviderConfigured()) providers.add("local");
   return [...providers];
 }

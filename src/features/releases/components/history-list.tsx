@@ -22,7 +22,7 @@ import { HistoryRowActions } from "@/features/releases/components/history-row-ac
 
 export interface HistoryRow {
   id: string;
-  provider: "GITHUB" | "BITBUCKET" | "GITLAB";
+  provider: "GITHUB" | "BITBUCKET" | "GITLAB" | "LOCAL";
   repoOwner: string;
   repoName: string;
   baseRef: string;
